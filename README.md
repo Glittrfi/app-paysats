@@ -6,6 +6,11 @@ Agent-first Bitcoin super app with an MCP server, built on **Privy × Base**.
 
 > IDRX × Base · USDC · x402 · Privy — built for the South East Asia market to deposit, save (DCA), borrow, and cash out.
 
+**Live:**
+
+- App: [apps.paysats.exchange](https://apps.paysats.exchange)
+- MCP server: [privymcp.paysats.exchange](https://privymcp.paysats.exchange)
+
 ## What's new on this branch (`mcp/privy`)
 
 This branch turns PaySats into an **agentic Bitcoin super app**: an AI agent (e.g. Claude) connects to a hosted **MCP server** and operates the user's wallet on Base, while every on-chain action is signed **server-side via Privy's device-authorization grant** (no browser pop-ups). It targets the South East Asia market with rupiah on/off-ramps through IDRX.
