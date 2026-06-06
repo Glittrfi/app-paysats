@@ -23,7 +23,10 @@ This branch turns PaySats into an **agentic Bitcoin super app**: an AI agent (e.
 
 **Stack additions:** `@modelcontextprotocol` / `mcp-handler` MCP server (`app/api/mcp/[transport]`), OAuth endpoints (`app/api/oauth/*`, `app/.well-known/*`), Privy device-auth + server signing (`services/privy/*`), Morpho credit service (`services/credit/*`), IDRX mint/redeem/destinations services (`services/idrx/*`), DCA order/signing services (`services/dca/*`), and Base mainnet (chain `8453`, cbBTC + USDC + Morpho Blue).
 
-**Example transaction:** [`0x4c039751…d58e6083` on BaseScan](https://basescan.org/tx/0x4c039751e39d3a028b484c4e84e5c35a5346efd55fec3aebbf053450d58e6083)
+**Example transactions (BaseScan):**
+
+- **IDR deposit (IDRX mint):** [`0x713ae0f8…56d9af35b`](https://basescan.org/tx/0x713ae0f87b9ede60f49cfa8e03209558210690438a70d6c73c62fc056d9af35b)
+- **IDR DCA → cbBTC:** [`0x4c039751…d58e6083`](https://basescan.org/tx/0x4c039751e39d3a028b484c4e84e5c35a5346efd55fec3aebbf053450d58e6083)
 
 ---
 
