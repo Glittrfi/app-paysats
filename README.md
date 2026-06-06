@@ -1,3 +1,32 @@
+# PaySats
+
+**Project:** Paysats · **Team:** paysats (Nick × Vib)
+
+Agent-first Bitcoin super app with an MCP server, built on **Privy × Base**.
+
+> IDRX × Base · USDC · x402 · Privy — built for the South East Asia market to deposit, save (DCA), borrow, and cash out.
+
+## What's new on this branch (`mcp/privy`)
+
+This branch turns PaySats into an **agentic Bitcoin super app**: an AI agent (e.g. Claude) connects to a hosted **MCP server** and operates the user's wallet on Base, while every on-chain action is signed **server-side via Privy's device-authorization grant** (no browser pop-ups). It targets the South East Asia market with rupiah on/off-ramps through IDRX.
+
+**Flows the agent can run end-to-end:**
+
+- **Deposit (IDR → IDRX):** create an IDR deposit; the user pays via bank/QRIS and IDRX is minted to their Privy smart wallet on Base.
+- **Save (DCA into Bitcoin):** recurring IDRX → cbBTC swaps on a daily/weekly/monthly schedule. Low balance auto-returns a deposit link for the shortfall instead of failing.
+- **Borrow (USDC against BTC):** lock cbBTC into **Morpho** as collateral and borrow USDC, capped at a safe LTV — `approve + supplyCollateral + borrow` batched into one sponsored UserOp.
+- **Cash out (USDC → IDR):** convert USDC to IDR via IDRX redeem and disburse to a saved bank / e-wallet (GoPay, BCA, etc.).
+
+**MCP tools exposed:** `get_account`, `create_idr_deposit`, `get_deposit_status`, `setup_dca`, `get_dca_status`, `cancel_dca`, `get_dca_history`, `get_credit`, `borrow_against_btc`, `list_payout_destinations`, `cash_out_to_bank`.
+
+**Auth:** custom OAuth 2.0 + RFC 8628 device-authorization grant bridging the MCP client to a Privy user/session, so the server can sign transactions on the user's behalf within a Privy policy.
+
+**Stack additions:** `@modelcontextprotocol` / `mcp-handler` MCP server (`app/api/mcp/[transport]`), OAuth endpoints (`app/api/oauth/*`, `app/.well-known/*`), Privy device-auth + server signing (`services/privy/*`), Morpho credit service (`services/credit/*`), IDRX mint/redeem/destinations services (`services/idrx/*`), DCA order/signing services (`services/dca/*`), and Base mainnet (chain `8453`, cbBTC + USDC + Morpho Blue).
+
+**Example transaction:** [`0x4c039751…d58e6083` on BaseScan](https://basescan.org/tx/0x4c039751e39d3a028b484c4e84e5c35a5346efd55fec3aebbf053450d58e6083)
+
+---
+
 # PaySats — produk web (mobile-first)
 
 Aplikasi produk PaySats: autentikasi Privy (Google + dompet embedded), onboarding IDRX (KYC), permintaan mint IDRX, dan riwayat transaksi. Tidak ada landing pemasaran; fokus pada alur produk.
