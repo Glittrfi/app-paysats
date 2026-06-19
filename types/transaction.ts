@@ -1,7 +1,11 @@
+import type { TranslationKey } from "@/lib/translations";
+
 export type MintSettlementInfo = {
   paymentComplete: boolean;
   mintComplete: boolean;
   summary: string;
+  /** Translation key the UI renders so the summary respects the locale */
+  summaryKey: TranslationKey;
 };
 
 export type MintTransaction = {

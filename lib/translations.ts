@@ -187,6 +187,14 @@ const id = {
   "tx.status.mintFailed": "Gagal mint",
   "tx.status.waiting": "Menunggu",
 
+  // Settlement summaries (mint/deposit)
+  "tx.settle.done": "Pembayaran & mint selesai",
+  "tx.settle.paidMinting": "Dibayar — mint sedang diproses",
+  "tx.settle.waitingPayment": "Menunggu pembayaran",
+  "tx.settle.expired": "Pembayaran kedaluwarsa",
+  "tx.settle.mintFailed": "Mint gagal",
+  "tx.settle.processing": "Dalam proses",
+
   // Profile
   "profile.title": "Profil",
   "profile.subtitle":
@@ -465,8 +473,8 @@ const id = {
   "offramp.redeemQuoteFee": "Biaya",
   "offramp.redeemQuoteRate": "Kurs",
   "offramp.redeemQuoteFallback": "*Perkiraan — kurs final ditetapkan IDRX.",
-  "offramp.redeemSubmit": "Kirim USDC ke IDRX",
-  "offramp.redeemSubmitting": "Mengirim…",
+  "offramp.redeemSubmit": "Cairkan ke Rupiah",
+  "offramp.redeemSubmitting": "Mencairkan…",
   "offramp.redeemOverMax":
     "Batas $5.555 per transaksi. Ulangi setelah redeem sebelumnya selesai, atau hubungi support@idrx.co.",
   "offramp.redeemUnderMin": "Minimal $2 per transaksi.",
@@ -482,6 +490,13 @@ const id = {
   "offramp.stageBurn": "IDRX dibakar — mencairkan IDR…",
   "offramp.stageDisbursed": "IDR sudah dikirim ke tujuan",
   "offramp.stageFailed": "Redeem gagal",
+  "offramp.summaryDisbursed": "IDR sudah dikirim ke rekening/e-wallet",
+  "offramp.summaryFailed": "Redeem gagal — dana akan dikembalikan",
+  "offramp.summaryBurning": "IDRX dibakar — menunggu pencairan IDR",
+  "offramp.summarySwapped": "Swap selesai — sedang diproses ke IDR",
+  "offramp.summarySwapping": "Menukar USDC ke IDRX…",
+  "offramp.summaryPendingTransfer": "Menunggu konfirmasi transfer on-chain…",
+  "offramp.summaryPendingIdrx": "Menunggu konfirmasi IDRX…",
   "offramp.viewTransferTx": "Transfer USDC",
   "offramp.viewSwapTx": "Swap",
   "offramp.viewBurnTx": "Burn IDRX",
@@ -728,6 +743,14 @@ const en: Record<keyof typeof id, string> = {
   "tx.status.approved": "Approved",
   "tx.status.mintFailed": "Mint failed",
   "tx.status.waiting": "Waiting",
+
+  // Settlement summaries (mint/deposit)
+  "tx.settle.done": "Payment & mint complete",
+  "tx.settle.paidMinting": "Paid — mint in progress",
+  "tx.settle.waitingPayment": "Waiting for payment",
+  "tx.settle.expired": "Payment expired",
+  "tx.settle.mintFailed": "Mint failed",
+  "tx.settle.processing": "In progress",
 
   // Profile
   "profile.title": "Profile",
@@ -1006,8 +1029,8 @@ const en: Record<keyof typeof id, string> = {
   "offramp.redeemQuoteFee": "Fee",
   "offramp.redeemQuoteRate": "Rate",
   "offramp.redeemQuoteFallback": "*Estimate — final rate set by IDRX.",
-  "offramp.redeemSubmit": "Send USDC to IDRX",
-  "offramp.redeemSubmitting": "Sending…",
+  "offramp.redeemSubmit": "Cash out to IDR",
+  "offramp.redeemSubmitting": "Cashing out…",
   "offramp.redeemOverMax":
     "Per-transaction cap is $5,555. Retry after the previous redeem settles, or email support@idrx.co.",
   "offramp.redeemUnderMin": "Minimum $2 per transaction.",
@@ -1023,6 +1046,13 @@ const en: Record<keyof typeof id, string> = {
   "offramp.stageBurn": "IDRX burned — disbursing IDR…",
   "offramp.stageDisbursed": "IDR sent to destination",
   "offramp.stageFailed": "Redeem failed",
+  "offramp.summaryDisbursed": "IDR sent to your bank / e-wallet",
+  "offramp.summaryFailed": "Redeem failed — funds will be refunded",
+  "offramp.summaryBurning": "IDRX burned — awaiting IDR disbursement",
+  "offramp.summarySwapped": "Swap complete — processing to IDR",
+  "offramp.summarySwapping": "Swapping USDC to IDRX…",
+  "offramp.summaryPendingTransfer": "Awaiting on-chain transfer confirmation…",
+  "offramp.summaryPendingIdrx": "Awaiting IDRX confirmation…",
   "offramp.viewTransferTx": "USDC transfer",
   "offramp.viewSwapTx": "Swap",
   "offramp.viewBurnTx": "IDRX burn",

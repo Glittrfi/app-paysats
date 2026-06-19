@@ -1,4 +1,5 @@
 import type { IdrxDepositRedeemRecord } from "./types";
+import type { TranslationKey } from "@/lib/translations";
 
 export type OfframpStage =
   | "pending_transfer"
@@ -9,8 +10,10 @@ export type OfframpStage =
 
 export type OfframpSettlement = {
   stage: OfframpStage;
-  /** Short human-readable status line (Indonesian) */
+  /** Short human-readable status line (Indonesian fallback) */
   summary: string;
+  /** Translation key the UI should render so the summary respects the locale */
+  summaryKey: TranslationKey;
   /** Whether this redeem is in a terminal state */
   terminal: boolean;
 };
@@ -55,6 +58,7 @@ export function deriveOfframpStage(
     return {
       stage: "disbursed",
       summary: "IDR sudah dikirim ke rekening/e-wallet",
+      summaryKey: "offramp.summaryDisbursed",
       terminal: true,
     };
   }
@@ -65,6 +69,7 @@ export function deriveOfframpStage(
     return {
       stage: "failed",
       summary: "Redeem gagal — dana akan dikembalikan",
+      summaryKey: "offramp.summaryFailed",
       terminal: true,
     };
   }
@@ -73,6 +78,7 @@ export function deriveOfframpStage(
     return {
       stage: "burning",
       summary: "IDRX dibakar — menunggu pencairan IDR",
+      summaryKey: "offramp.summaryBurning",
       terminal: false,
     };
   }
@@ -81,6 +87,7 @@ export function deriveOfframpStage(
     return {
       stage: "burning",
       summary: "Swap selesai — sedang diproses ke IDR",
+      summaryKey: "offramp.summarySwapped",
       terminal: false,
     };
   }
@@ -91,6 +98,9 @@ export function deriveOfframpStage(
     summary: r.transferTxHash
       ? "Menukar USDC ke IDRX…"
       : "Menunggu konfirmasi transfer on-chain…",
+    summaryKey: r.transferTxHash
+      ? "offramp.summarySwapping"
+      : "offramp.summaryPendingTransfer",
     terminal: false,
   };
 }
@@ -100,6 +110,7 @@ export function pendingLocalSettlement(): OfframpSettlement {
   return {
     stage: "pending_transfer",
     summary: "Menunggu konfirmasi IDRX…",
+    summaryKey: "offramp.summaryPendingIdrx",
     terminal: false,
   };
 }

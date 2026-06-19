@@ -138,11 +138,16 @@ export function ProductShell({ children }: { children: React.ReactNode }) {
   const hideNav = CHROMELESS_PREFIXES.some((p) => pathname.startsWith(p));
 
   return (
-    <div className="relative mx-auto flex min-h-dvh max-w-md flex-1 flex-col bg-paysats-bg">
+    <div className="relative mx-auto flex min-h-dvh w-full max-w-md flex-1 flex-col bg-paysats-bg">
       <main
         key={pathname}
         className={`relative flex-1 animate-fade-rise ${hideNav ? "" : "pb-24"}`}
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+        style={{
+          // Guarantee a stable top inset: respect the device safe area when
+          // present, but never collapse below a small floor so the header
+          // can't jam against the top edge on first paint.
+          paddingTop: "max(env(safe-area-inset-top, 0px), 0.5rem)",
+        }}
       >
         {children}
       </main>

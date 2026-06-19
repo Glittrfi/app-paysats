@@ -230,11 +230,11 @@ export function ActivityClient() {
         : minted
           ? "success"
           : "warning";
-      const status =
-        tx.settlement?.summary ??
-        (minted
+      const status = tx.settlement?.summaryKey
+        ? tFn(tx.settlement.summaryKey)
+        : minted
           ? summarizeMint(tx.adminMintStatus, tx.userMintStatus, tFn)
-          : summarizePayment(tx.paymentStatus, tFn));
+          : summarizePayment(tx.paymentStatus, tFn);
       const item: ActivityItem = {
         id: tx.id,
         type: "in",

@@ -109,7 +109,7 @@ export function RedeemStatusCard({ record }: { record: RedeemRecord }) {
       )}
 
       <p className="text-xs text-paysats-text-muted">
-        {record.settlement.summary}
+        {t(record.settlement.summaryKey)}
       </p>
 
       <div className="flex flex-wrap gap-1.5">

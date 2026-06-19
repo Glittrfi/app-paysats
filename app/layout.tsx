@@ -15,6 +15,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // viewport-fit=cover makes env(safe-area-inset-*) report real values so the
+  // shell's safe-area padding applies consistently. Without it the inset
+  // resolves to 0 on some paints, jamming the header under the status bar/notch.
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
