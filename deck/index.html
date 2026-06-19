@@ -1,0 +1,1111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PaySats · Agentic Bitcoin Payments for Southeast Asia</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f7f3ef;
+        --surface: #ffffff;
+        --surface-muted: #f0ebe5;
+        --border: #e8e2dc;
+        --ink: #161210;
+        --muted: #7a7168;
+        --faint: #b8b0a6;
+        --accent: #b85c38;
+        --accent-2: #d08850;
+        --accent-3: #dca060;
+        --success: #2da84e;
+        --warning: #cc9a0a;
+        --danger: #c43030;
+        --grad: linear-gradient(140deg, #be6640 0%, #d08850 55%, #dca060 100%);
+        --grad-hero: linear-gradient(
+          135deg,
+          #a84e2e,
+          #be6640,
+          #cc7d48,
+          #d89255,
+          #dca060,
+          #cc7d48,
+          #be6640,
+          #a84e2e
+        );
+        --shadow-card: 0 1px 3px rgba(22, 18, 16, 0.05),
+          0 8px 30px rgba(22, 18, 16, 0.04);
+        --shadow-hero: 0 18px 60px rgba(170, 80, 40, 0.28);
+        --r-lg: 26px;
+        --r-md: 18px;
+        --r-sm: 12px;
+        --font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", Roboto, ui-sans-serif, system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+        letter-spacing: -0.011em;
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden;
+      }
+
+      /* ===== Deck shell ===== */
+      .deck {
+        position: fixed;
+        inset: 0;
+      }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        padding: clamp(34px, 4.6vw, 72px);
+        opacity: 0;
+        transform: translateY(14px);
+        transition: opacity 0.45s ease, transform 0.45s ease;
+        overflow: hidden;
+      }
+
+      .slide.active {
+        display: flex;
+        opacity: 1;
+        transform: none;
+      }
+
+      .inner {
+        width: 100%;
+        max-width: 1120px;
+        margin: 0 auto;
+      }
+
+      /* ===== Typography ===== */
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 22px;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 22px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--grad);
+      }
+
+      h1 {
+        font-size: clamp(38px, 5vw, 70px);
+        line-height: 1.03;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+      }
+
+      h2 {
+        font-size: clamp(28px, 3.7vw, 46px);
+        line-height: 1.06;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        margin-bottom: 12px;
+      }
+
+      h3 {
+        font-size: clamp(18px, 1.5vw, 22px);
+        font-weight: 700;
+      }
+
+      p.lead {
+        font-size: clamp(16px, 1.5vw, 21px);
+        line-height: 1.5;
+        color: var(--muted);
+        max-width: 52ch;
+      }
+
+      .grad-text {
+        background: var(--grad);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+      .faint {
+        color: var(--faint);
+      }
+
+      /* ===== Logo ===== */
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 800;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+      .logo {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        flex: none;
+      }
+
+      /* ===== Cards & grids ===== */
+      .grid {
+        display: grid;
+        gap: 18px;
+      }
+      .g2 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .g3 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .g4 {
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        padding: 22px;
+        box-shadow: var(--shadow-card);
+      }
+
+      .card .ic {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-size: 20px;
+        background: var(--surface-muted);
+        margin-bottom: 13px;
+      }
+      .card h3 {
+        margin-bottom: 6px;
+      }
+      .card p {
+        font-size: 14.5px;
+        line-height: 1.48;
+        color: var(--muted);
+      }
+
+      .card.accent {
+        background: var(--grad-hero);
+        background-size: 300% 300%;
+        color: #fff;
+        border: none;
+        box-shadow: var(--shadow-hero);
+        animation: grad 14s ease infinite;
+      }
+      .card.accent p,
+      .card.accent .ic {
+        color: #fff;
+      }
+      .card.accent .ic {
+        background: rgba(255, 255, 255, 0.18);
+      }
+
+      @keyframes grad {
+        0%,
+        100% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+      }
+
+      /* ===== Stat blocks ===== */
+      .stat .n {
+        font-size: clamp(34px, 4vw, 52px);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1;
+      }
+      .stat .n.grad-text {
+        display: inline-block;
+      }
+      .stat .l {
+        margin-top: 10px;
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+
+      /* ===== Two-column hero layout ===== */
+      .split {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 48px;
+        align-items: center;
+      }
+
+      /* ===== Pills / chips ===== */
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 30px;
+      }
+      .pill {
+        font-size: 14px;
+        font-weight: 600;
+        padding: 9px 16px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--ink);
+        box-shadow: var(--shadow-card);
+      }
+
+      /* ===== Flow / steps ===== */
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        align-items: stretch;
+      }
+      .step {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        padding: 20px 16px;
+        box-shadow: var(--shadow-card);
+      }
+      .step .num {
+        font-size: 12px;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: 0.08em;
+      }
+      .step .t {
+        margin-top: 8px;
+        font-weight: 700;
+        font-size: 16px;
+      }
+      .step .d {
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .step .arrow {
+        position: absolute;
+        right: -11px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 2;
+        color: var(--accent-2);
+        font-size: 18px;
+        background: var(--bg);
+        line-height: 1;
+      }
+
+      /* ===== Compare table ===== */
+      .compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .compare .col {
+        border-radius: var(--r-md);
+        padding: 28px;
+        border: 1px solid var(--border);
+      }
+      .compare .bad {
+        background: var(--surface);
+      }
+      .compare .good {
+        background: linear-gradient(160deg, #fff, var(--surface-muted));
+        border-color: var(--accent-3);
+      }
+      .compare h3 {
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 18px;
+      }
+      .compare .bad h3 {
+        color: var(--danger);
+      }
+      .compare .good h3 {
+        color: var(--success);
+      }
+      .compare ul {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .compare li {
+        display: flex;
+        gap: 12px;
+        font-size: 16px;
+        line-height: 1.4;
+      }
+      .compare li .mark {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        font-weight: 800;
+        margin-top: 1px;
+      }
+      .bad .mark {
+        background: rgba(196, 48, 48, 0.1);
+        color: var(--danger);
+      }
+      .good .mark {
+        background: var(--success);
+        color: #fff;
+      }
+
+      /* ===== Agent terminal ===== */
+      .term {
+        background: #1a1411;
+        border-radius: var(--r-md);
+        padding: 24px 26px;
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 14.5px;
+        line-height: 1.7;
+        color: #e9ded3;
+        box-shadow: var(--shadow-hero);
+        overflow: hidden;
+      }
+      .term .dots {
+        display: flex;
+        gap: 7px;
+        margin-bottom: 16px;
+      }
+      .term .dots i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .term .u {
+        color: #dca060;
+      }
+      .term .a {
+        color: #8fd6a3;
+      }
+      .term .sys {
+        color: #8b8076;
+      }
+      .term .hl {
+        color: #fff;
+        font-weight: 600;
+      }
+
+      /* ===== Title slide visual ===== */
+      .hero-mark {
+        position: relative;
+        display: grid;
+        place-items: center;
+      }
+      .phone {
+        width: min(248px, 72%);
+        aspect-ratio: 9 / 17;
+        border-radius: 38px;
+        background: var(--grad-hero);
+        background-size: 280% 280%;
+        animation: grad 12s ease infinite;
+        box-shadow: var(--shadow-hero);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        color: #fff;
+      }
+      .phone .scr {
+        background: rgba(255, 255, 255, 0.13);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 22px;
+        padding: 16px 18px;
+        backdrop-filter: blur(4px);
+      }
+      .phone .scr.big {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .phone .lbl {
+        font-size: 12px;
+        opacity: 0.85;
+        font-weight: 600;
+      }
+      .phone .val {
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin-top: 4px;
+      }
+      .phone .row {
+        display: flex;
+        gap: 10px;
+      }
+      .phone .row .scr {
+        flex: 1;
+        text-align: center;
+        padding: 14px 8px;
+      }
+      .phone .mini {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      /* ===== footer / progress ===== */
+      .footer {
+        position: fixed;
+        left: clamp(40px, 6vw, 96px);
+        right: clamp(40px, 6vw, 96px);
+        bottom: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12.5px;
+        color: var(--faint);
+        z-index: 30;
+      }
+      .footer .brand-sm {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      .footer .logo-sm {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+      }
+
+      .dots-nav {
+        display: flex;
+        gap: 7px;
+      }
+      .dots-nav button {
+        width: 8px;
+        height: 8px;
+        padding: 0;
+        border: none;
+        border-radius: 50%;
+        background: var(--border);
+        cursor: pointer;
+        transition: all 0.25s ease;
+      }
+      .dots-nav button.on {
+        background: var(--accent);
+        width: 22px;
+        border-radius: 4px;
+      }
+
+      .nav-arrows {
+        position: fixed;
+        right: 26px;
+        bottom: 54px;
+        display: flex;
+        gap: 8px;
+        z-index: 40;
+      }
+      .nav-arrows button {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--ink);
+        font-size: 18px;
+        cursor: pointer;
+        box-shadow: var(--shadow-card);
+        transition: transform 0.1s ease;
+      }
+      .nav-arrows button:active {
+        transform: scale(0.94);
+      }
+
+      .bg-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(60px);
+        opacity: 0.5;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .inner,
+      .footer {
+        position: relative;
+        z-index: 5;
+      }
+
+      .tag {
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 6px 13px;
+        border-radius: 999px;
+        background: var(--accent-soft, rgba(184, 92, 56, 0.08));
+        color: var(--accent);
+        border: 1px solid rgba(184, 92, 56, 0.18);
+      }
+
+      .note {
+        margin-top: 26px;
+        font-size: 12.5px;
+        color: var(--faint);
+        max-width: 70ch;
+      }
+
+      /* ===== Print / PDF export ===== */
+      @media print {
+        @page {
+          size: 1280px 720px;
+          margin: 0;
+        }
+        body {
+          overflow: visible;
+        }
+        .nav-arrows,
+        .dots-nav {
+          display: none !important;
+        }
+        .slide {
+          display: flex !important;
+          opacity: 1 !important;
+          transform: none !important;
+          position: relative !important;
+          inset: auto !important;
+          width: 1280px;
+          height: 720px;
+          page-break-after: always;
+          break-after: page;
+        }
+        .footer {
+          position: absolute;
+        }
+        .card.accent,
+        .phone,
+        .term {
+          animation: none !important;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .split,
+        .compare {
+          grid-template-columns: 1fr;
+          gap: 26px;
+        }
+        .g3,
+        .g4,
+        .flow {
+          grid-template-columns: 1fr 1fr;
+        }
+        .step .arrow {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <linearGradient id="pg" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#be6640" />
+          <stop offset="55%" stop-color="#d08850" />
+          <stop offset="100%" stop-color="#dca060" />
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <div class="deck" id="deck">
+      <!-- 1 · TITLE -->
+      <section class="slide">
+        <div class="bg-orb" style="width: 460px; height: 460px; background: #dca060; top: -120px; right: -80px"></div>
+        <div class="bg-orb" style="width: 380px; height: 380px; background: #be6640; bottom: -140px; left: -100px; opacity: 0.35"></div>
+        <div class="inner split">
+          <div>
+            <div class="brand" style="margin-bottom: 36px">
+              <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100" height="100" rx="22" fill="url(#pg)" />
+                <rect x="15" y="18" width="17" height="64" rx="8.5" fill="#fff" />
+                <rect x="68" y="18" width="17" height="64" rx="8.5" fill="#fff" />
+                <circle cx="50" cy="50" r="9" fill="#fff" />
+              </svg>
+              PaySats
+            </div>
+            <h1>Agentic <span class="grad-text">Bitcoin</span><br />payments for<br />Southeast Asia</h1>
+            <p class="lead" style="margin-top: 26px">
+              Save in Bitcoin. Spend in rupiah. Borrow without selling,
+              and let AI agents run it for you.
+            </p>
+            <div class="pills">
+              <span class="pill">Auto-save into BTC</span>
+              <span class="pill">Borrow, don't sell</span>
+              <span class="pill">Agent-operated</span>
+            </div>
+          </div>
+          <div class="hero-mark">
+            <div class="phone">
+              <div class="scr big">
+                <div class="lbl">Total Bitcoin</div>
+                <div class="val">0.0428 BTC</div>
+                <div class="lbl" style="margin-top: 2px">≈ Rp 48.640.000</div>
+              </div>
+              <div class="row">
+                <div class="scr"><div class="mini">Auto-buy</div><div class="lbl">Rp 50k / wk</div></div>
+                <div class="scr"><div class="mini">Borrow</div><div class="lbl">no sell</div></div>
+              </div>
+              <div class="scr"><div class="lbl">🤖 Agent</div><div class="mini">"Set up weekly DCA" ✓</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2 · WHY SEA (demand) -->
+      <section class="slide">
+        <div class="inner">
+          <div class="eyebrow">The opportunity</div>
+          <h2>Southeast Asia wants to save in hard money</h2>
+          <p class="lead">The youngest, most mobile, most crypto-native region on earth, saving in currencies that keep losing ground.</p>
+          <div class="grid g4" style="margin-top: 44px">
+            <div class="card stat">
+              <div class="n grad-text">680M</div>
+              <div class="l">people across SEA, median age ~30, mobile-first</div>
+            </div>
+            <div class="card stat">
+              <div class="n grad-text">#1</div>
+              <div class="l">Indonesia & Vietnam rank top of the global crypto adoption index</div>
+            </div>
+            <div class="card stat">
+              <div class="n grad-text">20M+</div>
+              <div class="l">registered crypto investors in Indonesia alone</div>
+            </div>
+            <div class="card stat">
+              <div class="n grad-text">~70%</div>
+              <div class="l">of SEA adults are unbanked or underbanked</div>
+            </div>
+          </div>
+          <p class="note">Figures are indicative market context (Chainalysis adoption index, Bappebti, World Bank / e-Conomy SEA); to be sourced precisely for diligence.</p>
+        </div>
+      </section>
+
+      <!-- 3 · PROBLEM -->
+      <section class="slide">
+        <div class="bg-orb" style="width: 420px; height: 420px; background: #c43030; top: -160px; left: -120px; opacity: 0.18"></div>
+        <div class="inner">
+          <div class="eyebrow">The problem</div>
+          <h2>Every app treats your savings like chips on a table</h2>
+          <div class="grid g3" style="margin-top: 40px">
+            <div class="card">
+              <div class="ic">📉</div>
+              <h3>Built to make you trade</h3>
+              <p>Exchanges profit on volume, so the whole UX nudges you to buy, sell, and churn: the opposite of long-term saving.</p>
+            </div>
+            <div class="card">
+              <div class="ic">✂️</div>
+              <h3>The only "cash out" is sell</h3>
+              <p>Need money for rent, a bill, an emergency? The single button is <b>Sell</b>, so you give up the savings you worked to build.</p>
+            </div>
+            <div class="card">
+              <div class="ic">🧱</div>
+              <h3>Fiat on/off-ramps are clunky</h3>
+              <p>Getting rupiah in and out means KYC mazes, P2P risk, and apps that were never designed for everyday money.</p>
+            </div>
+          </div>
+          <p class="lead" style="margin-top: 36px; max-width: 64ch">
+            You wouldn't sell your house every time you need cash, so
+            <b style="color: var(--ink)">why sell your Bitcoin?</b>
+          </p>
+        </div>
+      </section>
+
+      <!-- 4 · INSIGHT: sell vs borrow -->
+      <section class="slide">
+        <div class="inner">
+          <div class="eyebrow">The insight</div>
+          <h2>Selling your savings is the expensive option</h2>
+          <div class="compare" style="margin-top: 36px">
+            <div class="col bad">
+              <h3>Selling BTC for cash</h3>
+              <ul>
+                <li><span class="mark">✕</span><span>You permanently lose your stack, and all its future upside</span></li>
+                <li><span class="mark">✕</span><span>Triggers a taxable event every time</span></li>
+                <li><span class="mark">✕</span><span>You're forced to sell at whatever the price is today</span></li>
+                <li><span class="mark">✕</span><span>You have to start saving all over again</span></li>
+              </ul>
+            </div>
+            <div class="col good">
+              <h3>Borrowing against BTC</h3>
+              <ul>
+                <li><span class="mark">✓</span><span>Keep 100% of your Bitcoin and its upside</span></li>
+                <li><span class="mark">✓</span><span>No sale, no realized gain</span></li>
+                <li><span class="mark">✓</span><span>Get stablecoins now, repay anytime, no penalties</span></li>
+                <li><span class="mark">✓</span><span>Your savings keep compounding while you spend</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5 · SOLUTION -->
+      <section class="slide">
+        <div class="bg-orb" style="width: 440px; height: 440px; background: #dca060; bottom: -160px; right: -120px; opacity: 0.4"></div>
+        <div class="inner">
+          <div class="eyebrow">The solution</div>
+          <h2>PaySats: a Bitcoin savings account that pays your bills</h2>
+          <p class="lead">One mobile app for the full loop: rupiah in, Bitcoin saved, cash out without ever selling.</p>
+          <div class="grid g3" style="margin-top: 40px">
+            <div class="card">
+              <div class="ic">🪙</div>
+              <h3>Auto-save into Bitcoin</h3>
+              <p>Deposit rupiah by bank or QRIS and DCA into BTC on a schedule. Start from Rp 25.000.</p>
+            </div>
+            <div class="card">
+              <div class="ic">🔒</div>
+              <h3>Borrow, never sell</h3>
+              <p>Lock Bitcoin as collateral and draw stablecoins instantly. Repay anytime, keep your stack.</p>
+            </div>
+            <div class="card accent">
+              <div class="ic">🤖</div>
+              <h3>Agent-operated</h3>
+              <p>AI agents check balances, top up, and manage your savings through PaySats. You stay in control of payments.</p>
+            </div>
+          </div>
+          <p class="lead" style="margin-top: 30px; max-width: 70ch; color: var(--ink); font-weight: 600">
+            Sign in with Google. No seed phrase. No exchange. Just savings that work.
+          </p>
+        </div>
+      </section>
+
+      <!-- 6 · HOW IT WORKS -->
+      <section class="slide">
+        <div class="inner">
+          <div class="eyebrow">How it works</div>
+          <h2>The whole money loop, in one app</h2>
+          <div class="flow" style="margin-top: 48px">
+            <div class="step">
+              <div class="num">01</div>
+              <div class="t">Sign in</div>
+              <div class="d">Google login creates a self-custodial smart wallet. No seed phrase.</div>
+              <span class="arrow">→</span>
+            </div>
+            <div class="step">
+              <div class="num">02</div>
+              <div class="t">Deposit IDR</div>
+              <div class="d">Bank transfer or QRIS mints IDRX: rupiah, on-chain.</div>
+              <span class="arrow">→</span>
+            </div>
+            <div class="step">
+              <div class="num">03</div>
+              <div class="t">Auto-DCA → BTC</div>
+              <div class="d">Scheduled swaps stack cbBTC automatically. Set and forget.</div>
+              <span class="arrow">→</span>
+            </div>
+            <div class="step">
+              <div class="num">04</div>
+              <div class="t">Borrow stablecoins</div>
+              <div class="d">Lock BTC, draw USDC instantly. No sale, no penalty.</div>
+              <span class="arrow">→</span>
+            </div>
+            <div class="step">
+              <div class="num">05</div>
+              <div class="t">Cash out</div>
+              <div class="d">Send IDR to any bank or e-wallet, within 24h.</div>
+            </div>
+          </div>
+          <div class="grid g3" style="margin-top: 44px">
+            <div class="stat"><div class="n" style="font-size: 30px">Privy</div><div class="l">Embedded wallets &amp; auth, no seed phrases</div></div>
+            <div class="stat"><div class="n" style="font-size: 30px">IDRX</div><div class="l">Licensed rupiah stablecoin for on/off-ramp rails</div></div>
+            <div class="stat"><div class="n" style="font-size: 30px">Base</div><div class="l">cbBTC, USDC &amp; Morpho lending on a low-fee L2</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7 · AGENTIC LAYER -->
+      <section class="slide">
+        <div class="inner split">
+          <div>
+            <div class="eyebrow">The differentiator</div>
+            <h2>Banking an AI agent can actually use</h2>
+            <p class="lead">PaySats ships a native agent interface (MCP). Connect Claude or any agent and it can read balances, top up, and run your savings, authorized per-user, with humans approving every payment.</p>
+            <div class="pills">
+              <span class="pill">OAuth per user</span>
+              <span class="pill">Human-approved payments</span>
+              <span class="pill">Self-custodial</span>
+            </div>
+            <p class="note">Live MCP tools: get_account · create_idr_deposit · setup_dca · get_dca_status · cancel_dca · get_dca_history</p>
+          </div>
+          <div class="term">
+            <div class="dots"><i style="background: #ff5f56"></i><i style="background: #ffbd2e"></i><i style="background: #27c93f"></i></div>
+            <div><span class="u">you ▸</span> save Rp 100k a week into Bitcoin</div>
+            <div style="margin-top: 10px"><span class="a">agent ▸</span> <span class="sys">get_account()</span></div>
+            <div><span class="sys">  balance: Rp 40.000 · need top-up</span></div>
+            <div><span class="a">agent ▸</span> <span class="sys">create_idr_deposit(60000)</span></div>
+            <div><span class="hl">  → pay here: pay.idrx/qris ·</span> <span class="sys">you approve ✓</span></div>
+            <div><span class="a">agent ▸</span> <span class="sys">setup_dca(100000, weekly)</span></div>
+            <div style="margin-top: 6px"><span class="a">agent ▸</span> <span class="hl">Done. Stacking Rp 100k → BTC every week. 🟢</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 8 · WHY NOW -->
+      <section class="slide">
+        <div class="inner">
+          <div class="eyebrow">Why now</div>
+          <h2>Four curves just crossed</h2>
+          <div class="grid g4" style="margin-top: 44px">
+            <div class="card">
+              <div class="ic">💵</div>
+              <h3>Stablecoin rails</h3>
+              <p>Licensed local stablecoins like IDRX make rupiah on/off-ramps instant and compliant.</p>
+            </div>
+            <div class="card">
+              <div class="ic">₿</div>
+              <h3>Bitcoin on-chain</h3>
+              <p>Wrapped BTC (cbBTC) + lending markets make "borrow, don't sell" a one-tap reality.</p>
+            </div>
+            <div class="card">
+              <div class="ic">👛</div>
+              <h3>Invisible wallets</h3>
+              <p>Account abstraction means a Google login is all a user ever needs to see.</p>
+            </div>
+            <div class="card accent">
+              <div class="ic">🤖</div>
+              <h3>Capable agents</h3>
+              <p>MCP gives AI agents a safe, standard way to operate real money on your behalf.</p>
+            </div>
+          </div>
+          <p class="lead" style="margin-top: 36px; max-width: 64ch">
+            The infrastructure for an agentic Bitcoin bank exists today. PaySats assembles it for the people who need it most.
+          </p>
+        </div>
+      </section>
+
+      <!-- 9 · MARKET -->
+      <section class="slide">
+        <div class="inner split">
+          <div>
+            <div class="eyebrow">Market</div>
+            <h2>Start in Indonesia. Win Southeast Asia.</h2>
+            <p class="lead">A wedge into the largest, fastest-growing crypto-savings market, then expand across the region on the same rails.</p>
+            <div class="pills">
+              <span class="pill">🇮🇩 Indonesia · launch</span>
+              <span class="pill">🇵🇭 Philippines</span>
+              <span class="pill">🇻🇳 Vietnam</span>
+              <span class="pill">🇹🇭 Thailand</span>
+            </div>
+          </div>
+          <div class="grid" style="gap: 16px">
+            <div class="card stat"><div class="n grad-text">$1B+</div><div class="l">SEA digital-asset volume opportunity as savings goes on-chain</div></div>
+            <div class="card stat"><div class="n grad-text">$80B+</div><div class="l">annual remittances flowing into SEA, ripe for stablecoin rails</div></div>
+            <div class="card stat"><div class="n grad-text">~30%</div><div class="l">of SEA GDP growth driven by the digital economy by 2030</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 10 · BUSINESS MODEL -->
+      <section class="slide">
+        <div class="inner">
+          <div class="eyebrow">Business model</div>
+          <h2>We earn when users save and spend</h2>
+          <div class="grid g4" style="margin-top: 44px">
+            <div class="card">
+              <div class="ic">🔁</div>
+              <h3>On/off-ramp spread</h3>
+              <p>A thin margin on every IDR ⇄ stablecoin conversion.</p>
+            </div>
+            <div class="card">
+              <div class="ic">📈</div>
+              <h3>DCA fee</h3>
+              <p>Small fee on automated recurring Bitcoin buys.</p>
+            </div>
+            <div class="card">
+              <div class="ic">🏦</div>
+              <h3>Lending spread</h3>
+              <p>Margin between user borrow rate and on-chain market rate.</p>
+            </div>
+            <div class="card">
+              <div class="ic">🤝</div>
+              <h3>Agent &amp; B2B</h3>
+              <p>Premium agent automations and a savings-API for partners.</p>
+            </div>
+          </div>
+          <p class="lead" style="margin-top: 36px; max-width: 66ch">
+            Aligned with the user: revenue grows as their savings grow, not as they churn.
+          </p>
+        </div>
+      </section>
+
+      <!-- 11 · STATUS / TRACTION -->
+      <section class="slide">
+        <div class="inner">
+          <div class="eyebrow">Status</div>
+          <h2>Built and working, not a mockup</h2>
+          <div class="grid g3" style="margin-top: 40px">
+            <div class="card">
+              <div class="ic">✅</div>
+              <h3>Live product</h3>
+              <p>Google auth + smart wallets, IDR deposits, auto-DCA, instant credit, and bank/e-wallet cash-out are all shipped.</p>
+            </div>
+            <div class="card">
+              <div class="ic">🤖</div>
+              <h3>Agent interface live</h3>
+              <p>A working MCP server lets agents operate accounts today, with human-approved payments.</p>
+            </div>
+            <div class="card">
+              <div class="ic">🔗</div>
+              <h3>Real rails integrated</h3>
+              <p>Privy, IDRX, cbBTC, USDC and Morpho lending wired end-to-end on Base.</p>
+            </div>
+          </div>
+          <div class="grid g3" style="margin-top: 26px">
+            <div class="stat"><div class="n" style="font-size: 30px">Rp 25k</div><div class="l">minimum to start saving</div></div>
+            <div class="stat"><div class="n" style="font-size: 30px">&lt; 24h</div><div class="l">cash-out to any bank or e-wallet</div></div>
+            <div class="stat"><div class="n" style="font-size: 30px">0</div><div class="l">seed phrases for the user to manage</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 12 · CLOSING -->
+      <section class="slide">
+        <div class="bg-orb" style="width: 520px; height: 520px; background: #dca060; top: -160px; right: -120px"></div>
+        <div class="bg-orb" style="width: 420px; height: 420px; background: #be6640; bottom: -180px; left: -120px; opacity: 0.4"></div>
+        <div class="inner" style="text-align: center">
+          <div class="brand" style="justify-content: center; margin-bottom: 30px">
+            <svg class="logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="100" height="100" rx="22" fill="url(#pg)" />
+              <rect x="15" y="18" width="17" height="64" rx="8.5" fill="#fff" />
+              <rect x="68" y="18" width="17" height="64" rx="8.5" fill="#fff" />
+              <circle cx="50" cy="50" r="9" fill="#fff" />
+            </svg>
+            PaySats
+          </div>
+          <h1 style="font-size: clamp(36px, 5.4vw, 72px)">The agentic Bitcoin<br />bank for the <span class="grad-text">next billion</span></h1>
+          <p class="lead" style="margin: 26px auto 0; text-align: center">
+            Save in hard money. Spend without selling. Let agents do the rest.
+          </p>
+          <div class="pills" style="justify-content: center">
+            <span class="pill">app.paysats.exchange</span>
+            <span class="pill">Let's talk</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="footer">
+      <span class="brand-sm">
+        <svg class="logo-sm" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100" height="100" rx="22" fill="url(#pg)" />
+          <rect x="15" y="18" width="17" height="64" rx="8.5" fill="#fff" />
+          <rect x="68" y="18" width="17" height="64" rx="8.5" fill="#fff" />
+          <circle cx="50" cy="50" r="9" fill="#fff" />
+        </svg>
+        PaySats
+      </span>
+      <div class="dots-nav" id="dotsNav"></div>
+      <span id="counter">01 / 12</span>
+    </div>
+
+    <div class="nav-arrows">
+      <button id="prev" aria-label="Previous">‹</button>
+      <button id="next" aria-label="Next">›</button>
+    </div>
+
+    <script>
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const dotsNav = document.getElementById("dotsNav");
+      const counter = document.getElementById("counter");
+      let i = 0;
+
+      slides.forEach((_, idx) => {
+        const b = document.createElement("button");
+        b.addEventListener("click", () => go(idx));
+        dotsNav.appendChild(b);
+      });
+      const dots = Array.from(dotsNav.children);
+
+      function go(n) {
+        i = Math.max(0, Math.min(slides.length - 1, n));
+        slides.forEach((s, idx) => s.classList.toggle("active", idx === i));
+        dots.forEach((d, idx) => d.classList.toggle("on", idx === i));
+        const pad = (x) => String(x + 1).padStart(2, "0");
+        counter.textContent = `${pad(i)} / ${pad(slides.length - 1)}`.replace(
+          `${pad(slides.length - 1)}`,
+          String(slides.length).padStart(2, "0")
+        );
+        counter.textContent = `${pad(i)} / ${String(slides.length).padStart(2, "0")}`;
+        location.hash = i + 1;
+      }
+
+      function next() {
+        go(i + 1);
+      }
+      function prev() {
+        go(i - 1);
+      }
+
+      document.getElementById("next").addEventListener("click", next);
+      document.getElementById("prev").addEventListener("click", prev);
+
+      document.addEventListener("keydown", (e) => {
+        if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) {
+          e.preventDefault();
+          next();
+        } else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) {
+          e.preventDefault();
+          prev();
+        } else if (e.key === "Home") {
+          go(0);
+        } else if (e.key === "End") {
+          go(slides.length - 1);
+        }
+      });
+
+      // Swipe (touch)
+      let sx = 0;
+      document.addEventListener("touchstart", (e) => (sx = e.touches[0].clientX), { passive: true });
+      document.addEventListener("touchend", (e) => {
+        const dx = e.changedTouches[0].clientX - sx;
+        if (Math.abs(dx) > 50) (dx < 0 ? next : prev)();
+      });
+
+      const start = parseInt(location.hash.slice(1), 10);
+      go(Number.isFinite(start) && start > 0 ? start - 1 : 0);
+    </script>
+  </body>
+</html>
