@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>PaySats X banner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    />
+    <style>
+      :root {
+        --bg: #f7f3ef;
+        --ink: #161210;
+        --muted: #7a7168;
+        --border: #e8e2dc;
+        --grad: linear-gradient(140deg, #be6640 0%, #d08850 55%, #dca060 100%);
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        width: 1500px;
+        height: 500px;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Plus Jakarta Sans", -apple-system, sans-serif;
+        position: relative;
+      }
+      /* soft warm glows, kept away from the bottom-left avatar zone */
+      .glow {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        opacity: 0.5;
+      }
+      .glow.a {
+        width: 560px;
+        height: 560px;
+        right: -140px;
+        top: -220px;
+        background: radial-gradient(circle, #dca060 0%, transparent 70%);
+      }
+      .glow.b {
+        width: 420px;
+        height: 420px;
+        left: 30%;
+        bottom: -260px;
+        background: radial-gradient(circle, #be6640 0%, transparent 70%);
+        opacity: 0.28;
+      }
+      .wrap {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        /* nudge up: X crops edges and overlays the avatar bottom-left */
+        padding: 0 100px 30px;
+      }
+      .txt h1 {
+        font-size: 88px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.06;
+      }
+      .txt h1 .grad-text {
+        background: var(--grad);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .txt .tag {
+        margin-top: 20px;
+        font-size: 33px;
+        font-weight: 600;
+        color: var(--muted);
+        letter-spacing: -0.01em;
+      }
+      .pills {
+        margin-top: 30px;
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+      }
+      .pill {
+        font-size: 21px;
+        font-weight: 700;
+        padding: 10px 22px;
+        border-radius: 999px;
+        background: #ffffff;
+        border: 1px solid var(--border);
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow a"></div>
+    <div class="glow b"></div>
+    <div class="wrap">
+      <div class="txt">
+        <h1>The agentic <span class="grad-text">Bitcoin</span> bank</h1>
+        <div class="tag">Save in Bitcoin. Spend in rupiah. Borrow without selling.</div>
+        <div class="pills">
+          <span class="pill">Auto-save into BTC</span>
+          <span class="pill">Borrow, don't sell</span>
+          <span class="pill">Agent-operated</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
