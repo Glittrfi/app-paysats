@@ -2,7 +2,9 @@
 
 import { Card } from "@/components/ui/card";
 import { fetchWithPrivy } from "@/lib/api";
+import { useDisplayUnit } from "@/lib/display-unit";
 import { useLocale, useT } from "@/lib/i18n";
+import { stacksExplorerTxUrl } from "@/lib/stacks/config";
 import type { MintTransaction } from "@/types/transaction";
 import { usePrivy } from "@privy-io/react-auth";
 import Link from "next/link";
@@ -14,6 +16,16 @@ import {
   type ActivityItem,
 } from "./activity-row";
 import { summarizeMint, summarizePayment } from "./status-map";
+
+type StacksSwapTx = {
+  id: string;
+  txId: string;
+  network: string;
+  amountInRaw: string;
+  amountOutRaw: string | null;
+  status: string;
+  createdAt: string;
+};
 
 function BackHeader({ title }: { title: string }) {
   return (
@@ -181,8 +193,10 @@ export function ActivityClient() {
   const merchantOrderId = searchParams.get("merchantOrderId")?.trim() ?? "";
   const t = useT();
   const { locale } = useLocale();
+  const { format: formatUnit, label: unitLabel } = useDisplayUnit();
   const localeStr = locale === "id" ? "id-ID" : "en-US";
   const [items, setItems] = useState<MintTransaction[] | null>(null);
+  const [stacksSwaps, setStacksSwaps] = useState<StacksSwapTx[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
 
@@ -191,18 +205,47 @@ export function ActivityClient() {
     setReloading(true);
     const q = new URLSearchParams({ page: "1", take: "20" });
     if (merchantOrderId) q.set("merchantOrderId", merchantOrderId);
-    const res = await fetchWithPrivy(
-      getAccessToken,
-      `/api/idrx/transactions?${q.toString()}`,
-    );
-    const j = await res.json().catch(() => ({}));
+
+    const [mintRes, stacksRes] = await Promise.allSettled([
+      (async () => {
+        const res = await fetchWithPrivy(
+          getAccessToken,
+          `/api/idrx/transactions?${q.toString()}`,
+        );
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(j.error || t("activity.failedLoad"));
+        }
+        return (j.transactions ?? []) as MintTransaction[];
+      })(),
+      (async () => {
+        const res = await fetchWithPrivy(
+          getAccessToken,
+          "/api/stacks/swap/record",
+        );
+        const j = (await res.json().catch(() => ({}))) as {
+          swaps?: StacksSwapTx[];
+          error?: string;
+        };
+        if (!res.ok) return [] as StacksSwapTx[];
+        return j.swaps ?? [];
+      })(),
+    ]);
+
     setReloading(false);
-    if (!res.ok) {
-      setError(j.error || t("activity.failedLoad"));
+    if (mintRes.status === "fulfilled") {
+      setItems(mintRes.value);
+    } else {
+      setError(
+        mintRes.reason instanceof Error
+          ? mintRes.reason.message
+          : t("activity.failedLoad"),
+      );
       setItems([]);
-      return;
     }
-    setItems(j.transactions ?? []);
+    setStacksSwaps(
+      stacksRes.status === "fulfilled" ? stacksRes.value : [],
+    );
   }, [getAccessToken, merchantOrderId, t]);
 
   useEffect(() => {
@@ -216,10 +259,48 @@ export function ActivityClient() {
     };
   }, [ready, authenticated, load]);
 
+  type FeedRow =
+    | { kind: "mint"; tx: MintTransaction; item: ActivityItem; sortAt: number }
+    | { kind: "stacks"; swap: StacksSwapTx; item: ActivityItem; sortAt: number };
+
   const rows = useMemo(() => {
-    if (!items) return [];
+    if (items === null && stacksSwaps === null) return null;
     const tFn = t as (k: string) => string;
-    return items.map((tx) => {
+    const out: FeedRow[] = [];
+
+    for (const swap of stacksSwaps ?? []) {
+      const usd = Number(swap.amountInRaw) / 1e6;
+      const sats =
+        swap.amountOutRaw != null ? Number(swap.amountOutRaw) : null;
+      const statusLabel =
+        swap.status === "success"
+          ? t("tx.stacksSuccess")
+          : swap.status === "failed"
+            ? t("tx.stacksFailed")
+            : t("tx.stacksPending");
+      out.push({
+        kind: "stacks",
+        swap,
+        sortAt: new Date(swap.createdAt).getTime(),
+        item: {
+          id: `stacks-${swap.id}`,
+          type: "buy",
+          title: t("tx.usdcxToSbtc"),
+          subtitle: `${relativeTime(swap.createdAt)} · ${statusLabel}`,
+          primary:
+            sats != null ? `+${formatUnit(sats)} ${unitLabel}` : "+sBTC",
+          secondary: `$${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+          tone:
+            swap.status === "success"
+              ? "accent"
+              : swap.status === "failed"
+                ? "danger"
+                : "warning",
+        },
+      });
+    }
+
+    for (const tx of items ?? []) {
       const adminUpper = tx.adminMintStatus.toUpperCase();
       const userUpper = tx.userMintStatus.toUpperCase();
       const minted = adminUpper.includes("MINT") && !adminUpper.includes("NOT");
@@ -235,17 +316,24 @@ export function ActivityClient() {
         : minted
           ? summarizeMint(tx.adminMintStatus, tx.userMintStatus, tFn)
           : summarizePayment(tx.paymentStatus, tFn);
-      const item: ActivityItem = {
-        id: tx.id,
-        type: "in",
-        title: t("tx.idrxDeposit"),
-        subtitle: `${relativeTime(tx.createdAt)} · ${status}`,
-        primary: `+Rp ${Number(tx.paymentAmount).toLocaleString(localeStr)}`,
-        tone,
-      };
-      return { tx, item };
-    });
-  }, [items, t, localeStr]);
+      out.push({
+        kind: "mint",
+        tx,
+        sortAt: new Date(tx.createdAt).getTime(),
+        item: {
+          id: tx.id,
+          type: "in",
+          title: t("tx.idrxDeposit"),
+          subtitle: `${relativeTime(tx.createdAt)} · ${status}`,
+          primary: `+Rp ${Number(tx.paymentAmount).toLocaleString(localeStr)}`,
+          tone,
+        },
+      });
+    }
+
+    out.sort((a, b) => b.sortAt - a.sortAt);
+    return out;
+  }, [items, stacksSwaps, t, localeStr, formatUnit, unitLabel]);
 
   return (
     <div className="px-5 pb-14">
@@ -265,7 +353,7 @@ export function ActivityClient() {
       ) : null}
 
       <div className="mt-5">
-        {items === null ? (
+        {rows === null ? (
           <Card className="py-0">
             <div className="space-y-3 py-3">
               {[1, 2, 3].map((i) => (
@@ -287,14 +375,30 @@ export function ActivityClient() {
           </Card>
         ) : (
           <Card className="divide-y divide-paysats-border/70 py-0">
-            {rows.map(({ tx, item }) => (
-              <TxActivityItem
-                key={tx.id}
-                tx={tx}
-                item={item}
-                localeStr={localeStr}
-              />
-            ))}
+            {rows.map((row) =>
+              row.kind === "mint" ? (
+                <TxActivityItem
+                  key={row.item.id}
+                  tx={row.tx}
+                  item={row.item}
+                  localeStr={localeStr}
+                />
+              ) : (
+                <a
+                  key={row.item.id}
+                  href={stacksExplorerTxUrl(
+                    row.swap.txId,
+                    row.swap.network === "testnet" ? "testnet" : "mainnet",
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                  data-pressable
+                >
+                  <ActivityRow item={row.item} />
+                </a>
+              ),
+            )}
           </Card>
         )}
       </div>

@@ -41,11 +41,20 @@ model User {
   /// Device-authorization grant: refresh token (encrypted), rotated on use.
   privyDeviceRefreshTokenEnc String?
 
+  /// Stacks pilot: externally-connected Stacks wallet address (Leather/Xverse
+  /// via @stacks/connect), linked to this PaySats account.
+  stacksAddress         String?
+  /// Network the linked Stacks address belongs to ('mainnet' | 'testnet').
+  stacksNetwork         String?
+  /// When the Stacks wallet was linked.
+  stacksLinkedAt        DateTime?
+
   mintSnapshots       MintRequestSnapshot[]
   creditLoans         CreditLoan[]
   payoutDestinations  PayoutDestination[]
   redeemRequests      RedeemRequest[]
   dcaExecutions       DcaExecution[]
+  stacksSwaps         StacksSwap[]
 }
 
 /// Dynamically-registered MCP/OAuth client (RFC 7591). Claude registers itself
@@ -204,6 +213,37 @@ model DcaExecution {
   @@unique([walletAddress, txHash])
   @@index([userId])
   @@index([walletAddress, blockNumber])
+}
+
+/// Stacks pilot: durable record of a USDCx -> sBTC swap submitted through the
+/// PaySats Bitflow flow. Written on broadcast, updated when the tx anchors.
+/// This is the transaction-record foundation Milestone 2's DCA history builds
+/// on, and the verifiable evidence trail for the Stacks Endowment.
+model StacksSwap {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Stacks address that signed the swap.
+  stacksAddress String
+  /// Stacks transaction id (0x-prefixed).
+  txId          String    @unique
+  network       String    // 'mainnet' | 'testnet'
+  /// Input token contract id (e.g. SP...usdcx).
+  tokenIn       String
+  /// Output token contract id (e.g. SM...sbtc-token).
+  tokenOut      String
+  /// Input amount in token minor units (decimal string).
+  amountInRaw   String
+  /// Quoted/actual output amount in token minor units (decimal string).
+  amountOutRaw  String?
+  /// 'pending' | 'success' | 'failed'
+  status        String    @default("pending")
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([stacksAddress])
 }
 
 /// Optional local snapshot after mint / for quicker empty states; list view still uses IDRX history API.

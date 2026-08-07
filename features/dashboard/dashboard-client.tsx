@@ -10,6 +10,8 @@ import {
 import { useBalances } from "@/hooks/use-balances";
 import { useCreditPosition } from "@/hooks/use-credit-line";
 import { useDcaOrder } from "@/hooks/use-dca-contract";
+import { useStacksBalances } from "@/hooks/use-stacks-balances";
+import { useStacksWallet } from "@/hooks/use-stacks-wallet";
 import { fetchWithPrivy } from "@/lib/api";
 import { useCurrency } from "@/lib/currency";
 import { useDisplayUnit } from "@/lib/display-unit";
@@ -19,6 +21,7 @@ import {
   USDC_DECIMALS,
 } from "@/lib/contracts/morpho-credit";
 import { IDRX_DECIMALS, INTERVAL_PRESETS } from "@/lib/contracts/paysats-dca";
+import { stacksExplorerTxUrl } from "@/lib/stacks/config";
 import { usePrivy } from "@privy-io/react-auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -40,6 +43,16 @@ type MintTx = {
   toBeMinted?: string | number;
   createdAt: string;
   txHash?: string | null;
+};
+
+type StacksSwapTx = {
+  id: string;
+  txId: string;
+  network: string;
+  amountInRaw: string;
+  amountOutRaw: string | null;
+  status: string;
+  createdAt: string;
 };
 
 function greetKey() {
@@ -141,12 +154,18 @@ function HeroBalance({
   currency,
   cashFiat,
   creditFiat,
+  stacksConnected,
+  usdcx,
+  stx,
 }: {
   sats: number | null;
   fiat: number;
   currency: "IDR" | "USD";
   cashFiat: number;
   creditFiat: number;
+  stacksConnected: boolean;
+  usdcx: number | null;
+  stx: number | null;
 }) {
   const t = useT();
   const { format: formatUnit, label: unitLabel } = useDisplayUnit();
@@ -173,7 +192,7 @@ function HeroBalance({
           className="text-[11px] font-bold uppercase tracking-[0.1em]"
           style={{ color: "rgba(255,255,255,0.75)" }}
         >
-          {t("home.balance.label")}
+          {stacksConnected ? t("home.balance.sbtc") : t("home.balance.label")}
         </div>
         <LogoMark size={18} color="rgba(255,255,255,0.6)" />
       </div>
@@ -200,40 +219,131 @@ function HeroBalance({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-2">
-        <Link
-          href="/cash"
-          data-pressable
-          className="rounded-[14px] px-3.5 py-3"
-          style={{ background: "rgba(255,255,255,0.12)" }}
-        >
-          <div
-            className="text-[10px] font-bold uppercase tracking-[0.08em]"
-            style={{ color: "rgba(255,255,255,0.7)" }}
-          >
-            {t("home.tile.cash")}
-          </div>
-          <div className="mt-1 text-[15px] font-extrabold">
-            {shortFiat(cashFiat, currency)}
-          </div>
-        </Link>
-        <Link
-          href="/credit"
-          data-pressable
-          className="rounded-[14px] px-3.5 py-3"
-          style={{ background: "rgba(255,255,255,0.12)" }}
-        >
-          <div
-            className="text-[10px] font-bold uppercase tracking-[0.08em]"
-            style={{ color: "rgba(255,255,255,0.7)" }}
-          >
-            {t("home.tile.credit")}
-          </div>
-          <div className="mt-1 text-[15px] font-extrabold">
-            {shortFiat(creditFiat, currency)}
-          </div>
-        </Link>
+        {stacksConnected ? (
+          <>
+            <Link
+              href="/stacks"
+              data-pressable
+              className="rounded-[14px] px-3.5 py-3"
+              style={{ background: "rgba(255,255,255,0.12)" }}
+            >
+              <div
+                className="text-[10px] font-bold uppercase tracking-[0.08em]"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
+                {t("home.tile.usdcx")}
+              </div>
+              <div className="mt-1 text-[15px] font-extrabold">
+                {usdcx != null
+                  ? `$${usdcx.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                  : "—"}
+              </div>
+            </Link>
+            <Link
+              href="/stacks"
+              data-pressable
+              className="rounded-[14px] px-3.5 py-3"
+              style={{ background: "rgba(255,255,255,0.12)" }}
+            >
+              <div
+                className="text-[10px] font-bold uppercase tracking-[0.08em]"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
+                {t("home.tile.stx")}
+              </div>
+              <div className="mt-1 text-[15px] font-extrabold tabular-nums">
+                {stx != null
+                  ? stx.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                  : "—"}
+              </div>
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link
+              href="/cash"
+              data-pressable
+              className="rounded-[14px] px-3.5 py-3"
+              style={{ background: "rgba(255,255,255,0.12)" }}
+            >
+              <div
+                className="text-[10px] font-bold uppercase tracking-[0.08em]"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
+                {t("home.tile.cash")}
+              </div>
+              <div className="mt-1 text-[15px] font-extrabold">
+                {shortFiat(cashFiat, currency)}
+              </div>
+            </Link>
+            <Link
+              href="/credit"
+              data-pressable
+              className="rounded-[14px] px-3.5 py-3"
+              style={{ background: "rgba(255,255,255,0.12)" }}
+            >
+              <div
+                className="text-[10px] font-bold uppercase tracking-[0.08em]"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
+                {t("home.tile.credit")}
+              </div>
+              <div className="mt-1 text-[15px] font-extrabold">
+                {shortFiat(creditFiat, currency)}
+              </div>
+            </Link>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+function NativeBtcRailNudge({ connected }: { connected: boolean }) {
+  const t = useT();
+  return (
+    <Link href="/stacks" data-pressable className="block">
+      <Card className="flex items-center gap-3">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-[16px] font-extrabold"
+          style={{
+            background: "var(--paysats-accent-soft)",
+            color: "var(--paysats-accent)",
+          }}
+        >
+          ₿
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className="flex items-center gap-2 text-[13px] font-bold"
+            style={{ color: "var(--paysats-text)" }}
+          >
+            {connected ? (
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "var(--paysats-success)" }}
+              />
+            ) : null}
+            {t("home.stacks.title")}
+          </div>
+          <div
+            className="mt-0.5 text-[11px]"
+            style={{ color: "var(--paysats-text-faint)" }}
+          >
+            {t("home.stacks.desc")}
+          </div>
+        </div>
+        <span
+          className="rounded-[10px] px-3 py-1.5 text-[11px] font-extrabold"
+          style={{
+            color: "var(--paysats-accent)",
+            background: "var(--paysats-accent-soft)",
+          }}
+        >
+          {connected ? t("home.stacks.btn") : t("home.stacks.connect")}
+        </span>
+      </Card>
+    </Link>
   );
 }
 
@@ -345,8 +455,11 @@ export function DashboardClient() {
   const t = useT();
   const { getAccessToken, ready, authenticated, user } = usePrivy();
   const { currency } = useCurrency();
+  const { format: formatUnit, label: unitLabel } = useDisplayUnit();
   const balances = useBalances();
   const credit = useCreditPosition();
+  const stacksWallet = useStacksWallet();
+  const stacksBalances = useStacksBalances(stacksWallet.address);
 
   // Fiat conversions
   const btcUsd = useMemo(() => {
@@ -362,7 +475,11 @@ export function DashboardClient() {
 
   const fxUsdToIdr = IDR_FALLBACK_PER_USD;
 
-  const btcSats = balances.btcSats;
+  // Prefer Stacks sBTC when the native BTC rail wallet is connected.
+  const stacksConnected = stacksWallet.connected;
+  const btcSats = stacksConnected
+    ? (stacksBalances.balances?.sbtcSats ?? 0)
+    : balances.btcSats;
   const btcUnit = btcSats != null ? btcSats / 1e8 : 0;
   const btcFiat = useMemo(() => {
     if (btcUsd == null) return 0;
@@ -387,26 +504,35 @@ export function DashboardClient() {
     return currency === "USD" ? borrowedUsd : borrowedUsd * fxUsdToIdr;
   }, [credit.data, currency, fxUsdToIdr]);
 
-  // Activity feed (mint transactions; DCA executions come later)
+  // Activity feed: Stacks swaps + mint transactions, newest first.
   const [mintTx, setMintTx] = useState<MintTx[] | null>(null);
+  const [stacksSwaps, setStacksSwaps] = useState<StacksSwapTx[] | null>(null);
   const tokenRef = useRef(getAccessToken);
   useLayoutEffect(() => {
     tokenRef.current = getAccessToken;
   }, [getAccessToken]);
+
   const loadTx = useCallback(async () => {
-    try {
-      const q = new URLSearchParams({ page: "1", take: "5" }).toString();
-      const res = await fetchWithPrivy(
-        tokenRef.current,
-        `/api/idrx/transactions?${q}`,
-      );
-      const j = (await res.json().catch(() => ({}))) as {
-        transactions?: MintTx[];
-      };
-      setMintTx(j.transactions ?? []);
-    } catch {
-      setMintTx([]);
-    }
+    const tokenFn = tokenRef.current;
+    const [mintRes, stacksRes] = await Promise.allSettled([
+      (async () => {
+        const q = new URLSearchParams({ page: "1", take: "10" }).toString();
+        const res = await fetchWithPrivy(tokenFn, `/api/idrx/transactions?${q}`);
+        const j = (await res.json().catch(() => ({}))) as {
+          transactions?: MintTx[];
+        };
+        return j.transactions ?? [];
+      })(),
+      (async () => {
+        const res = await fetchWithPrivy(tokenFn, "/api/stacks/swap/record");
+        const j = (await res.json().catch(() => ({}))) as {
+          swaps?: StacksSwapTx[];
+        };
+        return j.swaps ?? [];
+      })(),
+    ]);
+    setMintTx(mintRes.status === "fulfilled" ? mintRes.value : []);
+    setStacksSwaps(stacksRes.status === "fulfilled" ? stacksRes.value : []);
   }, []);
 
   useEffect(() => {
@@ -425,8 +551,39 @@ export function DashboardClient() {
   const initial = (firstName || "A").slice(0, 1).toUpperCase();
 
   const activityItems: ActivityItem[] = useMemo(() => {
-    const items: ActivityItem[] = [];
-    // DCA buys from on-chain executions would merge here.
+    type Dated = ActivityItem & { sortAt: number };
+    const items: Dated[] = [];
+
+    for (const s of stacksSwaps ?? []) {
+      const usd = Number(s.amountInRaw) / 1e6;
+      const sats = s.amountOutRaw != null ? Number(s.amountOutRaw) : null;
+      const statusLabel =
+        s.status === "success"
+          ? t("tx.stacksSuccess")
+          : s.status === "failed"
+            ? t("tx.stacksFailed")
+            : t("tx.stacksPending");
+      items.push({
+        id: `stacks-${s.id}`,
+        type: "buy",
+        title: t("tx.usdcxToSbtc"),
+        subtitle: `${relativeTime(s.createdAt)} · ${statusLabel}`,
+        primary:
+          sats != null
+            ? `+${formatUnit(sats)} ${unitLabel}`
+            : "+sBTC",
+        secondary: `$${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+        tone:
+          s.status === "success"
+            ? "accent"
+            : s.status === "failed"
+              ? "danger"
+              : "warning",
+        at: s.createdAt,
+        sortAt: new Date(s.createdAt).getTime(),
+      });
+    }
+
     for (const tx of mintTx ?? []) {
       const idr = tx.paymentAmount ?? 0;
       items.push({
@@ -437,10 +594,16 @@ export function DashboardClient() {
         primary: `+Rp ${Number(idr).toLocaleString("id-ID")}`,
         secondary: tx.paymentStatus ?? undefined,
         tone: "success",
+        at: tx.createdAt,
+        sortAt: new Date(tx.createdAt).getTime(),
       });
     }
-    return items;
-  }, [mintTx, t]);
+
+    items.sort((a, b) => b.sortAt - a.sortAt);
+    return items.slice(0, 8);
+  }, [mintTx, stacksSwaps, t, formatUnit, unitLabel]);
+
+  const activityLoading = mintTx === null && stacksSwaps === null;
 
   if (!ready || !authenticated) return null;
 
@@ -471,6 +634,9 @@ export function DashboardClient() {
           currency={currency}
           cashFiat={cashFiat}
           creditFiat={creditFiat}
+          stacksConnected={stacksConnected}
+          usdcx={stacksBalances.balances?.usdcx ?? null}
+          stx={stacksBalances.balances?.stx ?? null}
         />
       </div>
 
@@ -496,6 +662,10 @@ export function DashboardClient() {
         <AutobuyNudge />
       </div>
 
+      <div className="mt-3">
+        <NativeBtcRailNudge connected={stacksConnected} />
+      </div>
+
       <section className="mt-7">
         <div className="mb-2 flex items-center justify-between">
           <div
@@ -515,7 +685,7 @@ export function DashboardClient() {
         </div>
 
         <Card className="divide-y divide-paysats-border/70 py-0">
-          {mintTx === null ? (
+          {activityLoading ? (
             <div className="space-y-3 py-3">
               {[1, 2].map((i) => (
                 <div
@@ -532,7 +702,29 @@ export function DashboardClient() {
               {t("home.activity.empty")}
             </div>
           ) : (
-            activityItems.map((it) => <ActivityRow key={it.id} item={it} />)
+            activityItems.map((it) => {
+              const swap = stacksSwaps?.find(
+                (s) => `stacks-${s.id}` === it.id,
+              );
+              if (swap) {
+                return (
+                  <a
+                    key={it.id}
+                    href={stacksExplorerTxUrl(
+                      swap.txId,
+                      swap.network === "testnet" ? "testnet" : "mainnet",
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block"
+                    data-pressable
+                  >
+                    <ActivityRow item={it} />
+                  </a>
+                );
+              }
+              return <ActivityRow key={it.id} item={it} />;
+            })
           )}
         </Card>
       </section>
