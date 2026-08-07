@@ -4,7 +4,7 @@ import { fetchWithPrivy } from "@/lib/api";
 import { useCurrency, type CurrencyCode } from "@/lib/currency";
 import { useT } from "@/lib/i18n";
 import { usePostLoginSync } from "@/hooks/use-post-login-sync";
-import { useLoginWithOAuth, usePrivy } from "@privy-io/react-auth";
+import { useLogin, useLoginWithOAuth, usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -22,7 +22,7 @@ type Step = "splash" | "hook" | "creating" | "currency";
 
 /**
  * Full onboarding flow:
- *   splash → hook (google sign-in) → creating (post-login sync) → currency → /home
+ *   splash → hook (google or email) → creating (post-login sync) → currency → /home
  *
  * Handles users landing here both before and after Privy auth. If a returning
  * user has already completed onboarding we immediately bounce them to /home.
@@ -57,6 +57,20 @@ export function OnboardingClient() {
     }, 200);
   }, []);
 
+  const goRef = useRef(go);
+  useLayoutEffect(() => {
+    goRef.current = go;
+  }, [go]);
+
+  const { login } = useLogin({
+    onComplete: () => {
+      goRef.current("creating");
+    },
+    onError: () => {
+      setError(t("auth.loginFailed"));
+    },
+  });
+
   // Step 0 → decide where to go once Privy is ready
   useEffect(() => {
     if (step !== "splash") return;
@@ -70,6 +84,13 @@ export function OnboardingClient() {
     }, 1800);
     return () => window.clearTimeout(t);
   }, [ready, authenticated, step, go]);
+
+  // Email (or any) login that authenticates while still on the hook screen.
+  useEffect(() => {
+    if (step === "hook" && authenticated) {
+      go("creating");
+    }
+  }, [step, authenticated, go]);
 
   // Once authenticated, run post-login sync + check user/me for currency state
   useEffect(() => {
@@ -118,6 +139,11 @@ export function OnboardingClient() {
     }
   }, [initOAuth, go, t]);
 
+  const onContinueEmail = useCallback(() => {
+    setError(null);
+    login({ loginMethods: ["email"] });
+  }, [login]);
+
   const onCreatingDone = useCallback(() => {
     if (needsCurrency) {
       go("currency");
@@ -156,6 +182,7 @@ export function OnboardingClient() {
       {step === "hook" ? (
         <OnbHook
           onContinueGoogle={onContinueGoogle}
+          onContinueEmail={onContinueEmail}
           loading={oauthLoading}
           errorText={error ?? oauthError}
         />
