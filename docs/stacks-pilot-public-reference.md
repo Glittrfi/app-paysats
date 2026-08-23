@@ -15,7 +15,8 @@ aggregator, approving every transaction in their own wallet.
 
 - `@stacks/connect` (v8) — wallet connection + transaction signing UI
   (Leather, Xverse, …)
-- `@bitflowlabs/core-sdk` (v3) — route discovery, quotes, swap execution
+- `@bitflowlabs/core-sdk` (v4.1+) — route discovery, quotes, swap execution
+  (recurring DCA reuses the same aggregator from a PaySats keeper address)
 - `@stacks/transactions` / `@stacks/network` — peer deps used by both
 - Hiro API — balances and transaction status
 
@@ -37,10 +38,18 @@ Bitflow SDK token ids: `token-USDCx-auto` and `token-sbtc`.
    ```ts
    const bitflow = new BitflowSDK({
      BITFLOW_API_HOST: "https://bitflow-sdk-api-gateway-7owjsmt8.uc.gateway.dev",
-     KEEPER_API_HOST: "https://bitflow-keeper-7owjsmt8.uc.gateway.dev",
-     READONLY_CALL_API_HOST: "https://node.bitflowapis.finance",
+     KEEPER_API_HOST: "https://keeper.bitflowapis.finance",
+     READONLY_CALL_API_HOST: "https://api.hiro.so",
    });
    ```
+
+   Bitflow’s old read-only host `node.bitflowapis.finance` no longer
+   resolves. Hiro (`https://api.hiro.so`) exposes the same `/v2` RPC the
+   SDK uses for contract interfaces and quote simulations.
+
+   The Keeper write API (`createKeeperContract`, `createGroupOrder`, …)
+   lives on `keeper.bitflowapis.finance` and requires signed requests
+   (`timestamp` in ms + wallet signature + public key).
 
 2. **Bitflow routes on mainnet only.** The SDK context is hardwired to
    `STACKS_MAINNET` and the aggregator indexes mainnet pools. Don't plan a
@@ -149,9 +158,26 @@ broadcast and update it when the transaction anchors — that's the audit trail
 for the grant's adoption metrics and the base for recurring DCA history in
 Milestone 2.
 
+## Milestone 2 (DCA) — PaySats node keeper
+
+Bitflow Keepers cannot execute the interactive USDCx → sBTC multi-hop
+route (plans sit in `actionRetry` with no `execute-action` on chain).
+Recurring buys therefore reuse the **same M1 aggregator swap**, broadcast
+from a PaySats-owned Stacks address:
+
+1. User SIP-010-transfers `amount × N` USDCx to the PaySats keeper
+   address (custodial until swapped or refunded).
+2. A cron worker quotes via `getQuoteForRoute`, builds params with
+   `getSwapParams`, and broadcasts as that address (`tx-sender`).
+3. After Hiro confirms, PaySats reads the **actual sBTC inflow** and
+   SIP-010-transfers it to the user’s linked Stacks address.
+4. Cancel refunds leftover prepaid USDCx from the order ledger.
+
+See `docs/stacks-pilot.md` for the checklist, env vars, and why Bitflow
+Keepers were dropped for this pair.
+
 ## What's next
 
-- **Milestone 2:** recurring DCA (USDCx → sBTC on a schedule) + borrowing
-  USDCx against sBTC on Zest.
+- **Milestone 2 (remaining):** borrow against sBTC on Zest.
 - **Milestone 3:** MCP agent tools so AI agents can operate the Stacks
   account with human-approved payments, live on mainnet.

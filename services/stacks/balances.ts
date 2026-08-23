@@ -1,12 +1,12 @@
 import {
   assetIdentifier,
-  hiroApiBase,
   sbtcToken,
   stacksNetworkId,
   usdcxToken,
   type StacksNetworkId,
   type StacksTokenInfo,
 } from "@/lib/stacks/config";
+import { hiroFetch } from "@/lib/stacks/hiro";
 import { ServiceError } from "@/services/errors";
 
 type HiroBalancesResponse = {
@@ -56,17 +56,21 @@ export async function getStacksBalances(
   address: string,
   network: StacksNetworkId = stacksNetworkId(),
 ): Promise<StacksBalances> {
-  const url = `${hiroApiBase(network)}/extended/v1/address/${encodeURIComponent(
-    address,
-  )}/balances`;
-
-  const res = await fetch(url, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-    // Balances change per-block; never serve a stale cached copy.
-    cache: "no-store",
+  const path = `/extended/v1/address/${encodeURIComponent(address)}/balances`;
+  const res = await hiroFetch(path, {
+    network,
+    // Short cache absorbs duplicate /stacks loads + keeper prepaid probes.
+    cacheTtlMs: 15_000,
+    retries: 4,
   });
+
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new ServiceError(
+        429,
+        "Hiro is rate-limiting balance reads. Wait a few seconds and retry, or set HIRO_API_KEY for higher limits.",
+      );
+    }
     throw new ServiceError(
       502,
       `Hiro API error (${res.status}) while reading balances`,

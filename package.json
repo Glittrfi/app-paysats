@@ -13,7 +13,7 @@
     "deck:pdf": "node deck/export-pdf.mjs"
   },
   "dependencies": {
-    "@bitflowlabs/core-sdk": "^3.1.0",
+    "@bitflowlabs/core-sdk": "^4.1.0",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@morpho-org/blue-sdk": "^5.23.0",
     "@morpho-org/morpho-ts": "^2.5.1",

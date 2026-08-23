@@ -5,15 +5,22 @@ import { GradButton } from "@/components/ui/grad-button";
 import { InlinePanel } from "@/components/ui/inline-panel";
 import { PillSeg } from "@/components/ui/pill-seg";
 import { useStacksBalances } from "@/hooks/use-stacks-balances";
+import {
+  useStacksDca,
+  type StacksDcaExecution,
+  type StacksDcaOrder,
+} from "@/hooks/use-stacks-dca";
 import { useStacksSwap } from "@/hooks/use-stacks-swap";
 import { useStacksWallet } from "@/hooks/use-stacks-wallet";
 import { fetchWithPrivy } from "@/lib/api";
 import {
   DEFAULT_SLIPPAGE,
+  STACKS_DCA_INTERVALS,
   STACKS_TESTNET_FAUCET_URL,
   stacksExplorerAddressUrl,
   stacksExplorerTxUrl,
   swapEnabled,
+  type StacksDcaIntervalId,
 } from "@/lib/stacks/config";
 import { usePrivy } from "@privy-io/react-auth";
 import {
@@ -26,9 +33,9 @@ import {
 
 const USDCX_PRESETS = [5, 10, 25, 50];
 const SLIPPAGE_OPTIONS = [
-  { value: "0.005", label: "0.5%" },
   { value: "0.01", label: "1%" },
   { value: "0.02", label: "2%" },
+  { value: "0.04", label: "4%" },
 ] as const;
 type SlippageValue = (typeof SLIPPAGE_OPTIONS)[number]["value"];
 
@@ -261,10 +268,12 @@ function SwapCard({
   address,
   usdcxBalance,
   onSwapSettled,
+  embedded = false,
 }: {
   address: string;
   usdcxBalance: number | null;
   onSwapSettled: () => void;
+  embedded?: boolean;
 }) {
   const swap = useStacksSwap();
   const [amount, setAmount] = useState<number>(1);
@@ -337,8 +346,9 @@ function SwapCard({
         : swap.phase === "failed"
           ? "var(--paysats-danger)"
           : "var(--paysats-accent)";
+    const Shell = embedded ? "div" : Card;
     return (
-      <Card className="space-y-3">
+      <Shell className="space-y-3">
         <div className="flex items-center gap-2">
           <span
             className="h-2.5 w-2.5 rounded-full"
@@ -385,18 +395,21 @@ function SwapCard({
         >
           {swap.phase === "pending" ? "Start another swap" : "Done"}
         </button>
-      </Card>
+      </Shell>
     );
   }
 
+  const Shell = embedded ? "div" : Card;
   return (
-    <Card className="space-y-4">
-      <div
-        className="text-[13px] font-extrabold"
-        style={{ color: "var(--paysats-text)" }}
-      >
-        Swap USDCx → sBTC
-      </div>
+    <Shell className="space-y-4">
+      {embedded ? null : (
+        <div
+          className="text-[13px] font-extrabold"
+          style={{ color: "var(--paysats-text)" }}
+        >
+          Swap USDCx → sBTC
+        </div>
+      )}
 
       <div>
         <div className="mb-2 flex items-center justify-between gap-2">
@@ -622,7 +635,7 @@ function SwapCard({
           {swap.phase === "quoting" ? "Fetching quote…" : "Review swap"}
         </GradButton>
       ) : null}
-    </Card>
+    </Shell>
   );
 }
 
@@ -633,6 +646,605 @@ function Row({ label, value }: { label: string; value: string }) {
         {label}
       </span>
       <span className="text-[13px] font-extrabold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+// ---------- DCA (PaySats node keeper) ----------
+
+function intervalLabel(seconds: number): string {
+  const hit = STACKS_DCA_INTERVALS.find((i) => i.seconds === seconds);
+  if (hit) return hit.label;
+  if (seconds < 3600) return `Every ${Math.round(seconds / 60)}m`;
+  if (seconds < 86_400) return `Every ${Math.round(seconds / 3600)}h`;
+  return `Every ${Math.round(seconds / 86_400)}d`;
+}
+
+function DcaCard({
+  address,
+  usdcxBalance,
+  onChanged,
+  embedded = false,
+}: {
+  address: string;
+  usdcxBalance: number | null;
+  onChanged: () => void;
+  embedded?: boolean;
+}) {
+  const dca = useStacksDca(address);
+  const [amount, setAmount] = useState(10);
+  const [count, setCount] = useState(4);
+  const [intervalId, setIntervalId] =
+    useState<StacksDcaIntervalId>("1min");
+  const [reviewing, setReviewing] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (amount <= 0 || count < 2) return;
+    const t = setTimeout(() => {
+      void dca.fetchPreview({
+        amountPerOrder: amount,
+        numberOfOrders: count,
+        intervalId,
+      });
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounce preview
+  }, [amount, count, intervalId]);
+
+  const total = amount * count;
+  const prepaid = dca.prepaidUsdcx;
+  const insufficient =
+    usdcxBalance != null && usdcxBalance + 1e-9 < total;
+
+  const start = async () => {
+    try {
+      await dca.createOrder({
+        amountPerOrder: amount,
+        numberOfOrders: count,
+        intervalId,
+        quotedOutRaw: dca.preview
+          ? String(dca.preview.quotedOutSats)
+          : undefined,
+      });
+      setReviewing(false);
+      onChanged();
+    } catch {
+      // error surfaced on dca.error
+    }
+  };
+
+  const withdraw = async () => {
+    try {
+      await dca.withdrawPrepaid();
+      onChanged();
+    } catch {
+      // error surfaced on dca.error
+    }
+  };
+
+  const active = dca.orders.filter((o) =>
+    ["active", "executing", "cancelling", "pending_funding"].includes(o.status),
+  );
+
+  const Shell = embedded ? "div" : Card;
+  return (
+    <Shell className="space-y-3">
+      {embedded ? (
+        <p
+          className="text-[12px]"
+          style={{ color: "var(--paysats-text-muted)" }}
+        >
+          Prefund a schedule of USDCx → sBTC buys. Cancel refunds leftover
+          prepaid USDCx.
+        </p>
+      ) : (
+        <div>
+          <div
+            className="text-[13px] font-extrabold"
+            style={{ color: "var(--paysats-text)" }}
+          >
+            Recurring DCA
+          </div>
+          <p
+            className="mt-1 text-[12px]"
+            style={{ color: "var(--paysats-text-muted)" }}
+          >
+            Prefund a schedule of USDCx → sBTC buys. You send prepaid USDCx to
+            PaySats&apos; Stacks address; we swap on Bitflow on schedule and send
+            sBTC to your wallet. Cancel refunds leftover prepaid USDCx.
+          </p>
+        </div>
+      )}
+
+      {active.length > 0 ? (
+        <div className="space-y-2">
+          <div
+            className="text-[11px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: "var(--paysats-text-muted)" }}
+          >
+            Active plans
+          </div>
+          {active.map((o) => (
+            <DcaOrderRow
+              key={o.id}
+              order={o}
+              busy={dca.busy}
+              expanded={detailId === o.id}
+              onToggle={() =>
+                setDetailId((id) => (id === o.id ? null : o.id))
+              }
+              onCancel={() => void dca.cancelOrder(o.id, o.groupId)}
+              fetchDetail={dca.fetchOrderDetail}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <div className="space-y-2">
+        <label
+          className="text-[11px] font-bold uppercase tracking-[0.08em]"
+          style={{ color: "var(--paysats-text-muted)" }}
+        >
+          USDCx per buy
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {USDCX_PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setAmount(p)}
+              className="rounded-[10px] px-3 py-1.5 text-[12px] font-extrabold"
+              style={{
+                background:
+                  amount === p
+                    ? "var(--paysats-accent-soft)"
+                    : "var(--paysats-surface-muted)",
+                color:
+                  amount === p
+                    ? "var(--paysats-accent)"
+                    : "var(--paysats-text)",
+              }}
+              data-pressable
+            >
+              ${p}
+            </button>
+          ))}
+        </div>
+        <input
+          type="number"
+          min={0.01}
+          step={0.01}
+          value={amount}
+          onChange={(e) => setAmount(Number(e.target.value) || 0)}
+          className="w-full rounded-[12px] border px-3 py-2 text-[14px] font-extrabold tabular-nums outline-none"
+          style={{
+            borderColor: "var(--paysats-border)",
+            background: "var(--paysats-surface)",
+            color: "var(--paysats-text)",
+          }}
+        />
+      </div>
+
+      <div>
+        <div
+          className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+          style={{ color: "var(--paysats-text-muted)" }}
+        >
+          Frequency
+        </div>
+        <PillSeg
+          value={intervalId}
+          onChange={(v) => setIntervalId(v as StacksDcaIntervalId)}
+          options={STACKS_DCA_INTERVALS.map((i) => ({
+            value: i.id,
+            label: i.label,
+          }))}
+        />
+      </div>
+
+      <div>
+        <div
+          className="mb-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+          style={{ color: "var(--paysats-text-muted)" }}
+        >
+          Number of buys
+        </div>
+        <PillSeg
+          value={String(count) as "2" | "4" | "8" | "12"}
+          onChange={(v) => setCount(Number(v))}
+          options={[
+            { value: "2", label: "2" },
+            { value: "4", label: "4" },
+            { value: "8", label: "8" },
+            { value: "12", label: "12" },
+          ]}
+        />
+      </div>
+
+      <div
+        className="space-y-1 rounded-[12px] border p-3"
+        style={{ borderColor: "var(--paysats-border)" }}
+      >
+        <Row label="Prepaid total" value={formatUsd(total)} />
+        <Row
+          label="Est. sBTC / buy"
+          value={
+            dca.preview
+              ? `${formatSats(dca.preview.quotedOutSats)} sats`
+              : dca.quoting
+                ? "…"
+                : "—"
+          }
+        />
+        <Row
+          label="Est. sBTC total"
+          value={
+            dca.preview
+              ? `${formatSats(dca.preview.quotedOutSatsTotal)} sats`
+              : "—"
+          }
+        />
+        {dca.keeperAddress ? (
+          <Row
+            label="PaySats keeper"
+            value={shortAddress(dca.keeperAddress)}
+          />
+        ) : null}
+      </div>
+
+      {prepaid > 0 ? (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-[12px] border p-3"
+          style={{ borderColor: "var(--paysats-border)" }}
+        >
+          <p
+            className="min-w-0 flex-1 text-[12px]"
+            style={{ color: "var(--paysats-text-muted)" }}
+          >
+            {formatUsd(prepaid)} USDCx is still in an old Bitflow keeper
+            contract from earlier attempts. New plans do not use that balance —
+            withdraw it back to your wallet.
+          </p>
+          <button
+            type="button"
+            onClick={() => void withdraw()}
+            disabled={dca.busy}
+            className="rounded-[var(--radius-pill)] px-3 py-1.5 text-[12px] font-extrabold"
+            style={{
+              background: "var(--paysats-surface-muted)",
+              color: "var(--paysats-text)",
+            }}
+            data-pressable
+          >
+            {dca.phase === "withdrawing"
+              ? "Withdrawing…"
+              : "Withdraw prepaid"}
+          </button>
+        </div>
+      ) : null}
+
+      {dca.previewError ? (
+        <p className="text-xs" style={{ color: "var(--paysats-danger)" }}>
+          {dca.previewError}
+        </p>
+      ) : null}
+      {insufficient ? (
+        <p className="text-xs" style={{ color: "var(--paysats-danger)" }}>
+          Need {formatUsd(total)} USDCx in your wallet to prefund this plan.
+        </p>
+      ) : null}
+      {dca.error ? (
+        <p className="text-xs" style={{ color: "var(--paysats-danger)" }}>
+          {dca.error}
+        </p>
+      ) : null}
+
+      <InlinePanel open={reviewing}>
+        <div
+          className="space-y-2 rounded-[12px] border p-3"
+          style={{ borderColor: "var(--paysats-border)" }}
+        >
+          <div
+            className="text-[11px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: "var(--paysats-text-muted)" }}
+          >
+            Review DCA
+          </div>
+          <Row
+            label="Schedule"
+            value={`${formatUsd(amount)} × ${count} ${STACKS_DCA_INTERVALS.find((i) => i.id === intervalId)?.label ?? ""}`}
+          />
+          <Row label="You prefund" value={formatUsd(total)} />
+          <p
+            className="text-[11px]"
+            style={{ color: "var(--paysats-text-faint)" }}
+          >
+            You&apos;ll transfer {formatUsd(total)} USDCx to PaySats&apos;
+            Stacks keeper. We hold it until each scheduled Bitflow swap, then
+            send sBTC to your wallet. Cancel refunds leftover prepaid USDCx
+            from the plan ledger — not leftover wallet dust.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <GradButton
+              onClick={() => void start()}
+              disabled={dca.busy || insufficient || amount <= 0}
+              className="flex-1"
+            >
+              {dca.phase === "funding"
+                ? "Approve transfer…"
+                : dca.phase === "confirming"
+                  ? "Waiting for funding confirm…"
+                  : dca.busy
+                    ? "Working…"
+                    : "Confirm DCA"}
+            </GradButton>
+            <button
+              type="button"
+              onClick={() => setReviewing(false)}
+              disabled={dca.busy}
+              className="rounded-[var(--radius-pill)] px-4 text-[13px] font-extrabold"
+              style={{
+                background: "var(--paysats-surface-muted)",
+                color: "var(--paysats-text)",
+              }}
+              data-pressable
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </InlinePanel>
+
+      {!reviewing ? (
+        <GradButton
+          onClick={() => setReviewing(true)}
+          disabled={
+            amount <= 0 || count < 2 || insufficient || dca.quoting || dca.busy
+          }
+        >
+          {dca.quoting ? "Quoting…" : "Review DCA"}
+        </GradButton>
+      ) : null}
+
+      {dca.orders.filter((o) => o.status === "completed" || o.status === "cancelled")
+        .length > 0 ? (
+        <div className="space-y-1.5 pt-1">
+          <div
+            className="text-[11px] font-bold uppercase tracking-[0.08em]"
+            style={{ color: "var(--paysats-text-muted)" }}
+          >
+            Past plans
+          </div>
+          {dca.orders
+            .filter(
+              (o) => o.status === "completed" || o.status === "cancelled",
+            )
+            .slice(0, 3)
+            .map((o) => (
+              <div
+                key={o.id}
+                className="flex items-center justify-between rounded-[10px] px-2 py-1.5 text-[12px]"
+                style={{ background: "var(--paysats-surface-muted)" }}
+              >
+                <span className="font-semibold tabular-nums">
+                  {formatUsd(Number(o.amountPerOrderRaw) / 1e6)} ×{" "}
+                  {o.numberOfOrders} · {intervalLabel(o.executionFrequency)}
+                </span>
+                <span
+                  className="text-[11px] font-extrabold uppercase"
+                  style={{ color: "var(--paysats-text-muted)" }}
+                >
+                  {o.status}
+                </span>
+              </div>
+            ))}
+        </div>
+      ) : null}
+    </Shell>
+  );
+}
+
+function DcaOrderRow({
+  order,
+  busy,
+  expanded,
+  onToggle,
+  onCancel,
+  fetchDetail,
+}: {
+  order: StacksDcaOrder;
+  busy: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  onCancel: () => void;
+  fetchDetail: ReturnType<typeof useStacksDca>["fetchOrderDetail"];
+}) {
+  const [execs, setExecs] = useState<StacksDcaExecution[] | null>(null);
+  const [broadcastFailCount, setBroadcastFailCount] = useState(0);
+  const [lastError, setLastError] = useState<string | null>(
+    order.lastError ?? null,
+  );
+
+  const [live, setLive] = useState(order);
+  useEffect(() => {
+    setLive(order);
+  }, [order]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    const load = async () => {
+      const d = await fetchDetail(order.id);
+      if (cancelled || !d) return;
+      setExecs(d.executions);
+      setBroadcastFailCount(d.bitflow?.broadcastFailCount ?? 0);
+      setLastError(d.order.lastError ?? order.lastError ?? null);
+      setLive(d.order);
+    };
+    void load();
+    const watching = ["executing", "cancelling", "pending_funding"].includes(
+      live.status,
+    );
+    const id = watching ? setInterval(() => void load(), 8_000) : undefined;
+    return () => {
+      cancelled = true;
+      if (id) clearInterval(id);
+    };
+  }, [expanded, order.id, order.lastError, fetchDetail, live.status]);
+
+  const amount = Number(live.amountPerOrderRaw) / 1e6;
+  const legacyBitflow = Boolean(live.groupId);
+  const retrying =
+    legacyBitflow &&
+    (live.status === "retrying" ||
+      (execs ?? []).some((e) => e.status === "retrying"));
+  const canCancel = ["active", "pending_funding", "executing"].includes(
+    live.status,
+  );
+
+  const execLabel = (status: string) => {
+    if (status === "pending_swap") return "Swapping";
+    if (status === "pending_payout") return "Paying out";
+    if (status === "success") return "Bought";
+    return status;
+  };
+
+  return (
+    <div
+      className="rounded-[12px] border p-3"
+      style={{ borderColor: "var(--paysats-border)" }}
+    >
+      <button
+        type="button"
+        className="flex w-full items-center justify-between text-left"
+        onClick={onToggle}
+        data-pressable
+      >
+        <div>
+          <div className="text-[13px] font-extrabold tabular-nums">
+            {formatUsd(amount)} × {live.numberOfOrders} ·{" "}
+            {intervalLabel(live.executionFrequency)}
+          </div>
+          <div
+            className="text-[10px]"
+            style={{ color: "var(--paysats-text-muted)" }}
+          >
+            {live.remainingOrders != null
+              ? `${live.remainingOrders} remaining`
+              : live.status}
+            {live.status === "executing" || live.status === "cancelling"
+              ? " · buy in progress"
+              : live.nextExecutionAt
+                ? ` · next ${new Date(live.nextExecutionAt).toLocaleString()}`
+                : ""}
+          </div>
+        </div>
+        <span
+          className="text-[11px] font-extrabold uppercase"
+          style={{
+            color: retrying
+              ? "var(--paysats-danger)"
+              : "var(--paysats-accent)",
+          }}
+        >
+          {retrying ? "retrying" : live.status}
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="mt-3 space-y-2">
+          {lastError && !retrying ? (
+            <p className="text-[11px]" style={{ color: "var(--paysats-danger)" }}>
+              {lastError}
+            </p>
+          ) : null}
+          {retrying ? (
+            <p className="text-[11px]" style={{ color: "var(--paysats-danger)" }}>
+              Bitflow accepted the plan but swap broadcasts are failing
+              {broadcastFailCount > 0 ? ` (${broadcastFailCount} attempts)` : ""}
+              . Cancel this plan, withdraw leftover USDCx from the Bitflow
+              keeper, then create a new PaySats plan.
+            </p>
+          ) : null}
+          {live.fundingTxId ? (
+            <a
+              href={stacksExplorerTxUrl(live.fundingTxId)}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-[11px] font-bold underline"
+              style={{ color: "var(--paysats-accent)" }}
+            >
+              Funding tx
+            </a>
+          ) : null}
+          {execs && execs.length > 0 ? (
+            <div className="space-y-1">
+              {execs.map((e) => (
+                <div
+                  key={e.id}
+                  className="flex items-center justify-between gap-2 text-[11px]"
+                >
+                  <span style={{ color: "var(--paysats-text-muted)" }}>
+                    {execLabel(e.status)}
+                    {e.amountOutRaw
+                      ? ` · ${formatSats(Number(e.amountOutRaw))} sats`
+                      : ""}
+                  </span>
+                  <span className="flex gap-2">
+                    {e.txId ? (
+                      <a
+                        href={stacksExplorerTxUrl(e.txId)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold underline"
+                        style={{ color: "var(--paysats-accent)" }}
+                      >
+                        Swap
+                      </a>
+                    ) : null}
+                    {e.payoutTxId ? (
+                      <a
+                        href={stacksExplorerTxUrl(e.payoutTxId)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold underline"
+                        style={{ color: "var(--paysats-accent)" }}
+                      >
+                        Payout
+                      </a>
+                    ) : null}
+                    {!e.txId && !e.payoutTxId ? <span>—</span> : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : !retrying ? (
+            <p
+              className="text-[11px]"
+              style={{ color: "var(--paysats-text-faint)" }}
+            >
+              No buys yet — the next slice runs when due (or after the next
+              keeper tick).
+            </p>
+          ) : null}
+          {canCancel || retrying ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="rounded-[10px] px-3 py-1.5 text-[11px] font-extrabold"
+              style={{
+                background: "var(--paysats-surface-muted)",
+                color: "var(--paysats-danger)",
+              }}
+              data-pressable
+            >
+              Cancel plan
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -663,14 +1275,61 @@ function RecentSwaps({ refreshKey }: { refreshKey: number }) {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetchWithPrivy(
-          tokenRef.current,
-          "/api/stacks/swap/record",
-        );
-        const json = (await res.json().catch(() => ({}))) as {
+        const [swapRes, orderRes] = await Promise.all([
+          fetchWithPrivy(tokenRef.current, "/api/stacks/swap/record"),
+          fetchWithPrivy(tokenRef.current, "/api/stacks/dca/order"),
+        ]);
+        const swapJson = (await swapRes.json().catch(() => ({}))) as {
           swaps?: SwapRecord[];
         };
-        if (!cancelled) setSwaps(json.swaps ?? []);
+        const orderJson = (await orderRes.json().catch(() => ({}))) as {
+          orders?: Array<{
+            id: string;
+            amountPerOrderRaw: string;
+          }>;
+        };
+        const merged: SwapRecord[] = [...(swapJson.swaps ?? [])];
+        for (const o of (orderJson.orders ?? []).slice(0, 5)) {
+          const dRes = await fetchWithPrivy(
+            tokenRef.current,
+            `/api/stacks/dca/order/${o.id}`,
+          );
+          const dJson = (await dRes.json().catch(() => ({}))) as {
+            executions?: Array<{
+              id: string;
+              txId: string | null;
+              amountInRaw: string | null;
+              amountOutRaw: string | null;
+              status: string;
+              createdAt: string;
+            }>;
+          };
+          for (const e of dJson.executions ?? []) {
+            if (!e.txId) continue;
+            const status =
+              e.status === "success" || e.status === "pending_payout"
+                ? e.status === "success"
+                  ? "success"
+                  : "pending"
+                : e.status === "failed"
+                  ? "failed"
+                  : "pending";
+            merged.push({
+              id: e.id,
+              txId: e.txId,
+              network: "mainnet",
+              amountInRaw: e.amountInRaw ?? o.amountPerOrderRaw,
+              amountOutRaw: e.amountOutRaw,
+              status,
+              createdAt: e.createdAt,
+            });
+          }
+        }
+        merged.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+        if (!cancelled) setSwaps(merged);
       } catch {
         if (!cancelled) setSwaps([]);
       }
@@ -741,6 +1400,46 @@ function RecentSwaps({ refreshKey }: { refreshKey: number }) {
   );
 }
 
+function PilotTradeCard({
+  address,
+  usdcxBalance,
+  onChanged,
+}: {
+  address: string;
+  usdcxBalance: number | null;
+  onChanged: () => void;
+}) {
+  const [mode, setMode] = useState<"swap" | "dca">("dca");
+
+  return (
+    <Card className="space-y-4">
+      <PillSeg<"swap" | "dca">
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: "dca", label: "Recurring DCA" },
+          { value: "swap", label: "Swap" },
+        ]}
+      />
+      {mode === "swap" ? (
+        <SwapCard
+          address={address}
+          usdcxBalance={usdcxBalance}
+          onSwapSettled={onChanged}
+          embedded
+        />
+      ) : (
+        <DcaCard
+          address={address}
+          usdcxBalance={usdcxBalance}
+          onChanged={onChanged}
+          embedded
+        />
+      )}
+    </Card>
+  );
+}
+
 // ---------- Root ----------
 
 export function StacksClient() {
@@ -773,10 +1472,10 @@ export function StacksClient() {
             />
 
             {canSwap ? (
-              <SwapCard
+              <PilotTradeCard
                 address={wallet.address!}
                 usdcxBalance={balances?.usdcx ?? null}
-                onSwapSettled={onSwapSettled}
+                onChanged={onSwapSettled}
               />
             ) : (
               <Card className="space-y-2">
@@ -805,7 +1504,7 @@ export function StacksClient() {
         <p className="text-[10px]" style={{ color: "var(--paysats-text-faint)" }}>
           Native BTC rail funded by the Stacks Endowment. sBTC is Bitcoin-settled
           and 1:1 backed; USDCx is a Circle USDC-backed dollar via xReserve.
-          Swaps route through the Bitflow aggregator.
+          One-shot swaps and recurring DCA route through Bitflow.
         </p>
       </div>
     </div>

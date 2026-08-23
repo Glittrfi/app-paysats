@@ -23,7 +23,10 @@ export function getBitflowSdk(): BitflowSDK {
     _sdk = new BitflowSDK({
       ...BITFLOW_HOSTS,
       BITFLOW_API_KEY: process.env.BITFLOW_API_KEY || undefined,
-      READONLY_CALL_API_KEY: process.env.READONLY_CALL_API_KEY || undefined,
+      READONLY_CALL_API_KEY:
+        process.env.READONLY_CALL_API_KEY ||
+        process.env.HIRO_API_KEY ||
+        undefined,
       KEEPER_API_KEY: process.env.KEEPER_API_KEY || undefined,
     });
   }
@@ -76,9 +79,16 @@ export async function getUsdcxToSbtcQuote(amountIn: number): Promise<SwapQuote> 
 
   const best = result.bestRoute;
   if (!best || best.quote == null || best.quote <= 0) {
+    const detail = result.allRoutes
+      ?.map((r) => ("error" in r && r.error ? String(r.error) : null))
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("; ");
     throw new ServiceError(
       502,
-      "No USDCx -> sBTC route available on Bitflow right now",
+      detail
+        ? `Bitflow quote failed (${detail})`
+        : "No USDCx -> sBTC route available on Bitflow right now",
     );
   }
 

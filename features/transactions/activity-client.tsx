@@ -27,6 +27,16 @@ type StacksSwapTx = {
   createdAt: string;
 };
 
+type StacksDcaTx = {
+  id: string;
+  amountPerOrderRaw: string;
+  numberOfOrders: number;
+  fundingAmountRaw: string;
+  status: string;
+  fundingTxId: string | null;
+  createdAt: string;
+};
+
 function BackHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-3 pt-12">
@@ -197,6 +207,7 @@ export function ActivityClient() {
   const localeStr = locale === "id" ? "id-ID" : "en-US";
   const [items, setItems] = useState<MintTransaction[] | null>(null);
   const [stacksSwaps, setStacksSwaps] = useState<StacksSwapTx[] | null>(null);
+  const [stacksDca, setStacksDca] = useState<StacksDcaTx[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
 
@@ -206,7 +217,7 @@ export function ActivityClient() {
     const q = new URLSearchParams({ page: "1", take: "20" });
     if (merchantOrderId) q.set("merchantOrderId", merchantOrderId);
 
-    const [mintRes, stacksRes] = await Promise.allSettled([
+    const [mintRes, stacksRes, dcaRes] = await Promise.allSettled([
       (async () => {
         const res = await fetchWithPrivy(
           getAccessToken,
@@ -230,6 +241,17 @@ export function ActivityClient() {
         if (!res.ok) return [] as StacksSwapTx[];
         return j.swaps ?? [];
       })(),
+      (async () => {
+        const res = await fetchWithPrivy(
+          getAccessToken,
+          "/api/stacks/dca/order",
+        );
+        const j = (await res.json().catch(() => ({}))) as {
+          orders?: StacksDcaTx[];
+        };
+        if (!res.ok) return [] as StacksDcaTx[];
+        return j.orders ?? [];
+      })(),
     ]);
 
     setReloading(false);
@@ -246,6 +268,7 @@ export function ActivityClient() {
     setStacksSwaps(
       stacksRes.status === "fulfilled" ? stacksRes.value : [],
     );
+    setStacksDca(dcaRes.status === "fulfilled" ? dcaRes.value : []);
   }, [getAccessToken, merchantOrderId, t]);
 
   useEffect(() => {
@@ -261,10 +284,13 @@ export function ActivityClient() {
 
   type FeedRow =
     | { kind: "mint"; tx: MintTransaction; item: ActivityItem; sortAt: number }
-    | { kind: "stacks"; swap: StacksSwapTx; item: ActivityItem; sortAt: number };
+    | { kind: "stacks"; swap: StacksSwapTx; item: ActivityItem; sortAt: number }
+    | { kind: "dca"; order: StacksDcaTx; item: ActivityItem; sortAt: number };
 
   const rows = useMemo(() => {
-    if (items === null && stacksSwaps === null) return null;
+    if (items === null && stacksSwaps === null && stacksDca === null) {
+      return null;
+    }
     const tFn = t as (k: string) => string;
     const out: FeedRow[] = [];
 
@@ -294,6 +320,30 @@ export function ActivityClient() {
             swap.status === "success"
               ? "accent"
               : swap.status === "failed"
+                ? "danger"
+                : "warning",
+        },
+      });
+    }
+
+    for (const order of stacksDca ?? []) {
+      const per = Number(order.amountPerOrderRaw) / 1e6;
+      const total = Number(order.fundingAmountRaw) / 1e6;
+      out.push({
+        kind: "dca",
+        order,
+        sortAt: new Date(order.createdAt).getTime(),
+        item: {
+          id: `dca-${order.id}`,
+          type: "buy",
+          title: t("tx.stacksDca"),
+          subtitle: `${relativeTime(order.createdAt)} · ${order.status} · $${per.toLocaleString(undefined, { maximumFractionDigits: 2 })} × ${order.numberOfOrders}`,
+          primary: "sBTC DCA",
+          secondary: `$${total.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+          tone:
+            order.status === "completed" || order.status === "active"
+              ? "accent"
+              : order.status === "failed" || order.status === "cancelled"
                 ? "danger"
                 : "warning",
         },
@@ -333,7 +383,7 @@ export function ActivityClient() {
 
     out.sort((a, b) => b.sortAt - a.sortAt);
     return out;
-  }, [items, stacksSwaps, t, localeStr, formatUnit, unitLabel]);
+  }, [items, stacksSwaps, stacksDca, t, localeStr, formatUnit, unitLabel]);
 
   return (
     <div className="px-5 pb-14">
@@ -383,7 +433,7 @@ export function ActivityClient() {
                   item={row.item}
                   localeStr={localeStr}
                 />
-              ) : (
+              ) : row.kind === "stacks" ? (
                 <a
                   key={row.item.id}
                   href={stacksExplorerTxUrl(
@@ -397,6 +447,21 @@ export function ActivityClient() {
                 >
                   <ActivityRow item={row.item} />
                 </a>
+              ) : row.order.fundingTxId ? (
+                <a
+                  key={row.item.id}
+                  href={stacksExplorerTxUrl(row.order.fundingTxId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                  data-pressable
+                >
+                  <ActivityRow item={row.item} />
+                </a>
+              ) : (
+                <div key={row.item.id}>
+                  <ActivityRow item={row.item} />
+                </div>
               ),
             )}
           </Card>

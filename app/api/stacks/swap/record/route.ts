@@ -5,6 +5,7 @@ import {
   usdcxToken,
 } from "@/lib/stacks/config";
 import { getPrivyUserFromRequest } from "@/services/privy/server";
+import { fetchHiroTx } from "@/services/stacks/funding-tx";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -146,7 +147,38 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ swaps: [] });
   }
 
-  const swaps = await prisma.stacksSwap.findMany({
+  let swaps = await prisma.stacksSwap.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  const stale = swaps.filter((s) => s.status === "pending" || s.status === "failed");
+  for (const s of stale.slice(0, 5)) {
+    try {
+      const tx = await fetchHiroTx(s.txId);
+      if (tx.tx_status === "success" && s.status !== "success") {
+        await prisma.stacksSwap.update({
+          where: { id: s.id },
+          data: { status: "success", confirmedAt: new Date() },
+        });
+      } else if (
+        s.status === "pending" &&
+        tx.tx_status &&
+        tx.tx_status !== "pending" &&
+        tx.tx_status !== "not_found"
+      ) {
+        await prisma.stacksSwap.update({
+          where: { id: s.id },
+          data: { status: tx.tx_status === "success" ? "success" : "failed" },
+        });
+      }
+    } catch {
+      // Keep stored status if Hiro is unavailable.
+    }
+  }
+
+  swaps = await prisma.stacksSwap.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
     take: 20,

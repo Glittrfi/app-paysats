@@ -55,6 +55,7 @@ model User {
   redeemRequests      RedeemRequest[]
   dcaExecutions       DcaExecution[]
   stacksSwaps         StacksSwap[]
+  stacksDcaOrders     StacksDcaOrder[]
 }
 
 /// Dynamically-registered MCP/OAuth client (RFC 7591). Claude registers itself
@@ -244,6 +245,64 @@ model StacksSwap {
 
   @@index([userId])
   @@index([stacksAddress])
+}
+
+/// Stacks Milestone 2: prepaid USDCx → sBTC DCA on the PaySats node keeper.
+/// `groupId` is set only for legacy Bitflow Keepers plans.
+model StacksDcaOrder {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stacksAddress       String
+  network             String // 'mainnet' | 'testnet'
+  /// Bitflow group order id (unique when set).
+  groupId             String?   @unique
+  /// PaySats keeper address, or a legacy Bitflow keeper contract (SP….keeper-…).
+  keeperContractId    String
+  /// USDCx minor units per buy (6 decimals).
+  amountPerOrderRaw   String
+  numberOfOrders      Int
+  /// Seconds between executions.
+  executionFrequency  Int
+  /// Total USDCx prepaid into the keeper (minor units).
+  fundingAmountRaw    String
+  fundingTxId         String?
+  /// Quoted sBTC out per buy at create time (sats), optional.
+  quotedOutRaw        String?
+  /// pending_funding | active | executing | cancelling | completed | cancelled | failed
+  status              String    @default("pending_funding")
+  nextExecutionAt     DateTime?
+  remainingOrders     Int?
+  lastError           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  executions StacksDcaExecution[]
+
+  @@index([userId])
+  @@index([stacksAddress])
+  @@index([status])
+}
+
+/// One scheduled buy under a StacksDcaOrder (swap + sBTC payout).
+model StacksDcaExecution {
+  id             String    @id @default(cuid())
+  orderId        String
+  order          StacksDcaOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bitflowOrderId String?
+  txId           String?
+  payoutTxId     String?
+  amountInRaw    String?
+  amountOutRaw   String?
+  /// pending_swap | pending_payout | success | failed
+  status         String    @default("pending_swap")
+  executedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([orderId, bitflowOrderId])
+  @@index([orderId])
+  @@index([txId])
 }
 
 /// Optional local snapshot after mint / for quicker empty states; list view still uses IDRX history API.

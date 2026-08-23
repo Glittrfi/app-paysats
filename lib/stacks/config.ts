@@ -117,13 +117,35 @@ export const BITFLOW_HOSTS = {
   BITFLOW_API_HOST:
     process.env.NEXT_PUBLIC_BITFLOW_API_HOST ??
     "https://bitflow-sdk-api-gateway-7owjsmt8.uc.gateway.dev",
+  /** Live Keeper API (SDK default gateway is retired / 404s). */
   KEEPER_API_HOST:
     process.env.NEXT_PUBLIC_KEEPER_API_HOST ??
-    "https://bitflow-keeper-7owjsmt8.uc.gateway.dev",
+    "https://keeper.bitflowapis.finance",
+  /** Bitflow's `node.bitflowapis.finance` no longer resolves; Hiro is the same Stacks /v2 RPC. */
   READONLY_CALL_API_HOST:
     process.env.NEXT_PUBLIC_READONLY_CALL_API_HOST ??
-    "https://node.bitflowapis.finance",
+    "https://api.hiro.so",
 } as const;
+
+/**
+ * Bitflow fee recipient used by live Keeper orders. Override via
+ * NEXT_PUBLIC_BITFLOW_PROVIDER_ADDRESS / BITFLOW_PROVIDER_ADDRESS.
+ */
+export const BITFLOW_FEE_RECIPIENT =
+  process.env.NEXT_PUBLIC_BITFLOW_PROVIDER_ADDRESS ??
+  process.env.BITFLOW_PROVIDER_ADDRESS ??
+  "SP3MCM8K9KEJMFM6MN191JVN5CA51MDS7AM3SGYQ6";
+
+/** DCA interval presets (seconds) for Bitflow createGroupOrder. */
+export const STACKS_DCA_INTERVALS = [
+  /** Testing-only short interval — remove/hide before production pilot. */
+  { id: "1min", label: "1 min", seconds: 60 },
+  { id: "daily", label: "Daily", seconds: 86_400 },
+  { id: "weekly", label: "Weekly", seconds: 604_800 },
+  { id: "monthly", label: "Monthly", seconds: 2_592_000 },
+] as const;
+
+export type StacksDcaIntervalId = (typeof STACKS_DCA_INTERVALS)[number]["id"];
 
 /** Bitflow routing/execution only exists on mainnet. */
 export function swapEnabled(
@@ -132,7 +154,45 @@ export function swapEnabled(
   return network === "mainnet";
 }
 
+/**
+ * PaySats-owned Stacks address that holds prepaid USDCx and broadcasts
+ * Bitflow swaps. Safe to expose (NEXT_PUBLIC_) — users transfer to it.
+ */
+export function publicStacksKeeperAddress(): string | null {
+  const a = (
+    process.env.NEXT_PUBLIC_STACKS_KEEPER_ADDRESS ??
+    process.env.STACKS_KEEPER_ADDRESS ??
+    ""
+  ).trim();
+  return /^S[PMTN][0-9A-Z]{28,41}$/.test(a) ? a : null;
+}
+
+export function getStacksKeeperAddress(): string {
+  const a = publicStacksKeeperAddress();
+  if (!a) {
+    throw new Error(
+      "Set NEXT_PUBLIC_STACKS_KEEPER_ADDRESS (or STACKS_KEEPER_ADDRESS)",
+    );
+  }
+  return a;
+}
+
+/** Hex private key for the keeper (server-only). May include 01 compressed suffix. */
+export function getStacksKeeperPrivateKey(): string {
+  const key = (process.env.STACKS_KEEPER_PRIVATE_KEY ?? "").trim();
+  if (!/^(0x)?[0-9a-fA-F]{64}(01)?$/.test(key)) {
+    throw new Error("Set STACKS_KEEPER_PRIVATE_KEY to a hex Stacks private key");
+  }
+  return key.startsWith("0x") ? key.slice(2) : key;
+}
+
+export function stacksDcaCronSecret(): string | null {
+  const s = (process.env.STACKS_DCA_CRON_SECRET ?? "").trim();
+  return s.length >= 16 ? s : null;
+}
+
 /** Hiro testnet STX faucet (users need STX for gas). */
 export const STACKS_TESTNET_FAUCET_URL = "https://platform.hiro.so/faucet";
 
-export const DEFAULT_SLIPPAGE = 0.01; // 1%
+/** Multi-hop USDCx → sBTC matches Bitflow app’s typical 4% tolerance. */
+export const DEFAULT_SLIPPAGE = 0.04;

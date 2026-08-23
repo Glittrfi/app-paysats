@@ -141,11 +141,93 @@ Swap flow, end to end:
 8. Wait for (or cut to) confirmation; show the updated sBTC balance and the
    swap in **Recent swaps**.
 
-## Known limitations (Milestone 1)
+## Milestone 2 — Recurring DCA (PaySats node keeper)
 
-- Swaps are one-shot (recurring DCA lands in Milestone 2).
-- Bitflow routing is mainnet-only, so the swap flow is disabled on testnet.
-- The Stacks wallet is external (Leather/Xverse) rather than the embedded
-  Privy wallet used on Base — Stacks is not an EVM chain, so the Base signing
-  path can't be reused. Agent-initiated flows (Milestone 3) will prepare
-  transactions server-side with the human approving in their wallet.
+Automated USDCx → sBTC buys. Bitflow’s own Keepers cannot execute this
+multi-hop pair (`actionRetry`, no `execute-action` on chain). PaySats
+reuses the working M1 swap (`getQuoteForRoute` + `getSwapParams`) from a
+PaySats-owned Stacks address, then SIP-010-transfers the actual sBTC to
+the user.
+
+Prepaid USDCx is **custodial** on that address until swapped or refunded.
+Cancel refunds `remainingOrders × amountPerOrder` from the order ledger,
+not whatever happens to sit on the wallet.
+
+### Flow
+
+1. Connect Stacks wallet at `/stacks` (same as M1).
+2. Under **Recurring DCA**, pick amount / frequency / number of buys.
+3. Review shows the **prepaid total** (`amount × N`) and the PaySats keeper
+   address.
+4. Confirm: one SIP-010 `transfer` of USDCx to `NEXT_PUBLIC_STACKS_KEEPER_ADDRESS`.
+   After Hiro confirms the funding tx, PaySats stores a `StacksDcaOrder`.
+5. Cron `GET/POST /api/stacks/dca/execute` (Bearer `STACKS_DCA_CRON_SECRET`):
+   broadcast swap → persist pending + txid → later tick confirms → payout
+   **actual on-chain sats** (not the quote).
+6. Cancel refunds leftover prepaid USDCx. An in-flight slice is allowed to
+   finish; leftover is refunded immediately.
+7. Status / swap + payout explorer links / history are in the DCA card and
+   Activity.
+
+### Architecture (M2)
+
+```
+hooks/use-stacks-dca.ts              one fund tx + create/cancel
+services/stacks/dca-preview.ts       quote + custody note
+services/stacks/dca-executor.ts      due slices, no 20m wait
+services/stacks/node-keeper.ts       nonce-locked swap / payout / refund
+services/stacks/funding-tx.ts        verify user → keeper USDCx
+app/api/stacks/dca/quote|order|execute
+prisma: StacksDcaOrder + StacksDcaExecution
+```
+
+`services/stacks/bitflow-keeper.ts` remains for leftover Bitflow contracts
+(withdraw `withdraw-tokens`, cancel old `groupId` plans). Do **not** mix
+that USDCx into the PaySats keeper address.
+
+### Config
+
+```bash
+NEXT_PUBLIC_STACKS_NETWORK=mainnet
+NEXT_PUBLIC_STACKS_KEEPER_ADDRESS=SP…   # users transfer here
+STACKS_KEEPER_PRIVATE_KEY=             # hex, server-only
+STACKS_DCA_CRON_SECRET=                # min 16 chars
+HIRO_API_KEY=                          # recommended (avoids 429)
+```
+
+Fund the keeper with **STX** for gas. Vercel Cron hits
+`/api/stacks/dca/execute` every minute (`vercel.json`). Local:
+
+```bash
+curl -X POST -H "Authorization: Bearer $STACKS_DCA_CRON_SECRET" \
+  http://localhost:3000/api/stacks/dca/execute
+```
+
+### Spike notes (Bitflow Keepers — do not reuse for new plans)
+
+- Interactive USDCx → sBTC is multi-hop (`STABLE_XY_4` + XYK). Bitflow
+  Keepers never landed `execute-action` txs (`actionRetry` +
+  `broadcastErrors.actionCount`).
+- Max 2 keeper contracts per wallet; leftover USDCx is still in
+  `SP3R9DNH…keeper-4-eahhfqk3u-v-1-1` and `…keeper-4-iy9ogoajj-v-1-1`.
+  Withdraw via `withdraw-tokens` in the DCA card.
+
+### DCA demo checklist
+
+1. Set keeper address + key + cron secret; fund keeper with STX.
+2. `npx prisma migrate deploy` (adds `lastError`, `payoutTxId`).
+3. Sign in → `/stacks` → connect wallet with USDCx + STX.
+4. Smoke: **$0.2 × 2 @ 1 min**. Review → approve one USDCx transfer.
+5. Show active plan + funding tx on Hiro Explorer.
+6. `curl` execute (or wait for cron). First tick broadcasts swap; a later
+   tick confirms and pays out sBTC.
+7. Cancel remaining (refunds 1 slice if the other is in flight).
+
+## Known limitations
+
+- Bitflow routing is mainnet-only.
+- Prepaid USDCx is custodial on the PaySats keeper until swapped or
+  refunded.
+- The Stacks wallet is external (Leather/Xverse), not Privy embedded.
+- Zest borrow is Milestone 2 phase 2 (not in this DCA ship).
+- Agent-initiated Stacks flows land in Milestone 3.
