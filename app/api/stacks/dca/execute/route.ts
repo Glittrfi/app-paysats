@@ -5,19 +5,19 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 function authorizeCron(request: NextRequest): boolean {
-  const secrets = [stacksDcaCronSecret(), process.env.CRON_SECRET?.trim()].filter(
-    (s): s is string => Boolean(s && s.length >= 16),
-  );
-  if (secrets.length === 0) return false;
-  const auth = request.headers.get("authorization");
-  return secrets.some((s) => auth === `Bearer ${s}`);
+  const secret = stacksDcaCronSecret();
+  if (!secret) return false;
+  return request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
 /**
  * POST /api/stacks/dca/execute
  * Cron-guarded worker: swap due DCA slices and pay out sBTC.
+ * Returns `nextWakeAt` so the self-hosted worker can sleep until the next
+ * due slice (or ~45s while a swap/payout is in flight).
  *
- * Local: `curl -X POST -H "Authorization: Bearer $STACKS_DCA_CRON_SECRET" http://localhost:3000/api/stacks/dca/execute`
+ *   npm run dca:execute
+ *   npm run dca:cron
  */
 export async function POST(request: NextRequest) {
   if (!authorizeCron(request)) {
@@ -40,7 +40,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Vercel Cron invokes GET by default. */
 export async function GET(request: NextRequest) {
   return POST(request);
 }

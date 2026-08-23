@@ -167,8 +167,10 @@ from a PaySats-owned Stacks address:
 
 1. User SIP-010-transfers `amount × N` USDCx to the PaySats keeper
    address (custodial until swapped or refunded).
-2. A cron worker quotes via `getQuoteForRoute`, builds params with
-   `getSwapParams`, and broadcasts as that address (`tx-sender`).
+2. A self-hosted worker (`npm run dca:cron`) quotes via `getQuoteForRoute`,
+   builds params with `getSwapParams`, and broadcasts as that address
+   (`tx-sender`). It sleeps until the next due slice, or ~45s while a
+   swap/payout is in flight.
 3. After Hiro confirms, PaySats reads the **actual sBTC inflow** and
    SIP-010-transfers it to the user’s linked Stacks address.
 4. Cancel refunds leftover prepaid USDCx from the order ledger.

@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/stacks/dca/execute",
-      "schedule": "* * * * *"
-    }
-  ]
-}

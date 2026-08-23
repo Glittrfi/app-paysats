@@ -10,7 +10,9 @@
     "postinstall": "prisma generate && patch-package",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
-    "deck:pdf": "node deck/export-pdf.mjs"
+    "deck:pdf": "node deck/export-pdf.mjs",
+    "dca:cron": "node scripts/dca-cron.mjs",
+    "dca:execute": "node scripts/dca-cron.mjs --once"
   },
   "dependencies": {
     "@bitflowlabs/core-sdk": "^4.1.0",

@@ -161,9 +161,11 @@ not whatever happens to sit on the wallet.
    address.
 4. Confirm: one SIP-010 `transfer` of USDCx to `NEXT_PUBLIC_STACKS_KEEPER_ADDRESS`.
    After Hiro confirms the funding tx, PaySats stores a `StacksDcaOrder`.
-5. Cron `GET/POST /api/stacks/dca/execute` (Bearer `STACKS_DCA_CRON_SECRET`):
-   broadcast swap → persist pending + txid → later tick confirms → payout
-   **actual on-chain sats** (not the quote).
+5. Self-hosted worker `npm run dca:cron` POSTs `/api/stacks/dca/execute`
+   (Bearer `STACKS_DCA_CRON_SECRET`). Creating an order kicks the first
+   slice immediately. Later ticks confirm the swap and payout **actual
+   on-chain sats** (not the quote). The worker sleeps until `nextWakeAt`
+   (~45s while in flight, else until the next scheduled slice).
 6. Cancel refunds leftover prepaid USDCx. An in-flight slice is allowed to
    finish; leftover is refunded immediately.
 7. Status / swap + payout explorer links / history are in the DCA card and
@@ -174,9 +176,10 @@ not whatever happens to sit on the wallet.
 ```
 hooks/use-stacks-dca.ts              one fund tx + create/cancel
 services/stacks/dca-preview.ts       quote + custody note
-services/stacks/dca-executor.ts      due slices, no 20m wait
+services/stacks/dca-executor.ts      due slices + nextWakeAt
 services/stacks/node-keeper.ts       nonce-locked swap / payout / refund
 services/stacks/funding-tx.ts        verify user → keeper USDCx
+scripts/dca-cron.mjs                 adaptive POST loop
 app/api/stacks/dca/quote|order|execute
 prisma: StacksDcaOrder + StacksDcaExecution
 ```
@@ -192,16 +195,32 @@ NEXT_PUBLIC_STACKS_NETWORK=mainnet
 NEXT_PUBLIC_STACKS_KEEPER_ADDRESS=SP…   # users transfer here
 STACKS_KEEPER_PRIVATE_KEY=             # hex, server-only
 STACKS_DCA_CRON_SECRET=                # min 16 chars
+# DCA_CRON_URL=http://127.0.0.1:3000/api/stacks/dca/execute
 HIRO_API_KEY=                          # recommended (avoids 429)
 ```
 
-Fund the keeper with **STX** for gas. Vercel Cron hits
-`/api/stacks/dca/execute` every minute (`vercel.json`). Local:
+Fund the keeper with **STX** for gas. Run the adaptive worker next to
+the app — it is not a Vercel Cron and does not tick every minute when
+idle:
 
 ```bash
-curl -X POST -H "Authorization: Bearer $STACKS_DCA_CRON_SECRET" \
-  http://localhost:3000/api/stacks/dca/execute
+# local (Next on :3000)
+npm run dca:cron
+
+# one shot (same as the old curl)
+npm run dca:execute
+
+# production (Next on :3400, loopback only)
+DCA_CRON_URL=http://127.0.0.1:3400/api/stacks/dca/execute \
+  pm2 start npm --name paysats-dca-cron -- run dca:cron
 ```
+
+Wake rules (from `nextWakeAt` on the execute response):
+
+- Swap or payout in flight → ~45s
+- Next slice scheduled → sleep until `nextExecutionAt` (cap 5 min)
+- No orders → 5 min safety net
+- New order POST kicks execute so the first slice does not wait for idle sleep
 
 ### Spike notes (Bitflow Keepers — do not reuse for new plans)
 
@@ -219,8 +238,8 @@ curl -X POST -H "Authorization: Bearer $STACKS_DCA_CRON_SECRET" \
 3. Sign in → `/stacks` → connect wallet with USDCx + STX.
 4. Smoke: **$0.2 × 2 @ 1 min**. Review → approve one USDCx transfer.
 5. Show active plan + funding tx on Hiro Explorer.
-6. `curl` execute (or wait for cron). First tick broadcasts swap; a later
-   tick confirms and pays out sBTC.
+6. `npm run dca:cron` (or `dca:execute` once). First tick (or the create
+   kick) broadcasts swap; a later tick confirms and pays out sBTC.
 7. Cancel remaining (refunds 1 slice if the other is in flight).
 
 ## Known limitations

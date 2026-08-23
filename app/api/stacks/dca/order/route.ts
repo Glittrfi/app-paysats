@@ -7,7 +7,10 @@ import {
 } from "@/lib/stacks/config";
 import { ServiceError } from "@/services/errors";
 import { getPrivyUserFromRequest } from "@/services/privy/server";
-import { advanceInflightForUser } from "@/services/stacks/dca-executor";
+import {
+  advanceInflightForUser,
+  kickExecuteDueDcaOrders,
+} from "@/services/stacks/dca-executor";
 import { verifyUsdcxFundingTx } from "@/services/stacks/funding-tx";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -210,6 +213,8 @@ export async function POST(request: NextRequest) {
         remainingOrders: numberOfOrders,
       },
     });
+
+    kickExecuteDueDcaOrders();
 
     return NextResponse.json({ ok: true, order: serializeOrder(row) });
   } catch (e) {

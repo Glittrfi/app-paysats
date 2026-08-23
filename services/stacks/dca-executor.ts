@@ -8,9 +8,14 @@ import {
   payoutSbtc,
   sbtcInflowFromSwapTx,
 } from "@/services/stacks/node-keeper";
-import type { StacksDcaExecution, StacksDcaOrder } from "@prisma/client";
+import type { Prisma, StacksDcaExecution, StacksDcaOrder } from "@prisma/client";
 
 const MAX_DUE_ORDERS = 3;
+/** Poll Hiro this often while a swap or payout is in flight. */
+export const INFLIGHT_POLL_MS = 45_000;
+/** Longest idle sleep so a missed create-kick cannot stall forever. */
+export const MAX_IDLE_MS = 5 * 60_000;
+const MIN_SLEEP_MS = 2_000;
 
 export type DcaExecuteSummary = {
   processed: number;
@@ -18,6 +23,12 @@ export type DcaExecuteSummary = {
   started: number;
   failed: number;
   skipped: number;
+  inflight: boolean;
+  nextExecutionAt: string | null;
+  nextWakeAt: string;
+  /** True when another execute tick is already running in this process. */
+  busy?: boolean;
+  reason?: string;
   results: Array<{
     orderId: string;
     status: string;
@@ -26,6 +37,43 @@ export type DcaExecuteSummary = {
     payoutTxId?: string;
   }>;
 };
+
+export function computeNextWakeAt(
+  inflight: boolean,
+  nextExecutionAt: Date | null,
+  now = new Date(),
+): Date {
+  if (inflight) return new Date(now.getTime() + INFLIGHT_POLL_MS);
+  if (nextExecutionAt) {
+    const wait = Math.min(
+      Math.max(nextExecutionAt.getTime() - now.getTime(), MIN_SLEEP_MS),
+      MAX_IDLE_MS,
+    );
+    return new Date(now.getTime() + wait);
+  }
+  return new Date(now.getTime() + MAX_IDLE_MS);
+}
+
+function withWake(
+  partial: Omit<
+    DcaExecuteSummary,
+    "inflight" | "nextExecutionAt" | "nextWakeAt"
+  > & {
+    inflight: boolean;
+    nextExecutionAt: Date | null;
+  },
+): DcaExecuteSummary {
+  const now = new Date();
+  return {
+    ...partial,
+    nextExecutionAt: partial.nextExecutionAt?.toISOString() ?? null,
+    nextWakeAt: computeNextWakeAt(
+      partial.inflight,
+      partial.nextExecutionAt,
+      now,
+    ).toISOString(),
+  };
+}
 
 function sliceKey(orderId: string, sliceIndex: number) {
   return `${orderId}:slice-${sliceIndex}`;
@@ -268,12 +316,12 @@ async function startSlice(order: StacksDcaOrder): Promise<{
   }
 }
 
-const RECOVERABLE = {
+const RECOVERABLE: Prisma.StacksDcaExecutionWhereInput = {
   OR: [
     { status: { in: ["pending_swap", "pending_payout"] } },
     { status: "failed", txId: { not: null }, payoutTxId: null },
   ],
-} as const;
+};
 
 /** Confirm in-flight swaps/payouts for this user's plans. Does not start new slices. */
 export async function advanceInflightForUser(userId: string): Promise<void> {
@@ -293,18 +341,115 @@ export async function advanceInflightForUser(userId: string): Promise<void> {
   }
 }
 
+const DUE_ORDER: Prisma.StacksDcaOrderWhereInput = {
+  status: "active",
+  remainingOrders: { gt: 0 },
+};
+
+async function soonestFutureExecutionAt(now: Date): Promise<Date | null> {
+  const row = await prisma.stacksDcaOrder.findFirst({
+    where: {
+      ...DUE_ORDER,
+      nextExecutionAt: { gt: now },
+    },
+    orderBy: { nextExecutionAt: "asc" },
+    select: { nextExecutionAt: true },
+  });
+  return row?.nextExecutionAt ?? null;
+}
+
+async function workPending(): Promise<{
+  inflightRows: number;
+  dueRows: number;
+  executing: number;
+}> {
+  const now = new Date();
+  const [inflightRows, dueRows, executing] = await Promise.all([
+    prisma.stacksDcaExecution.count({ where: RECOVERABLE }),
+    prisma.stacksDcaOrder.count({
+      where: {
+        ...DUE_ORDER,
+        OR: [{ nextExecutionAt: null }, { nextExecutionAt: { lte: now } }],
+      },
+    }),
+    prisma.stacksDcaOrder.count({
+      where: { status: { in: ["executing", "cancelling"] } },
+    }),
+  ]);
+  return { inflightRows, dueRows, executing };
+}
+
+async function attachWake(
+  summary: Omit<DcaExecuteSummary, "inflight" | "nextExecutionAt" | "nextWakeAt">,
+): Promise<DcaExecuteSummary> {
+  const now = new Date();
+  const pending = await workPending();
+  const inflight =
+    pending.inflightRows > 0 ||
+    pending.dueRows > 0 ||
+    pending.executing > 0 ||
+    summary.started > 0;
+  const nextExecutionAt = inflight ? null : await soonestFutureExecutionAt(now);
+  return withWake({ ...summary, inflight, nextExecutionAt });
+}
+
+let executeRunning = false;
+
 /**
  * Advance in-flight slices, then start due swaps. Never waits for Stacks finality.
+ * Overlapping calls in this process return immediately with `busy: true`.
  */
 export async function executeDueDcaOrders(): Promise<DcaExecuteSummary> {
-  const summary: DcaExecuteSummary = {
+  if (executeRunning) {
+    return withWake({
+      processed: 0,
+      advanced: 0,
+      started: 0,
+      failed: 0,
+      skipped: 0,
+      results: [],
+      inflight: true,
+      nextExecutionAt: null,
+      busy: true,
+      reason: "busy",
+    });
+  }
+  executeRunning = true;
+  try {
+    return await executeDueDcaOrdersInner();
+  } finally {
+    executeRunning = false;
+  }
+}
+
+/** Fire-and-forget after a new order is stored so the first slice does not wait for idle sleep. */
+export function kickExecuteDueDcaOrders(): void {
+  void executeDueDcaOrders().catch((e) => {
+    console.error("DCA kick after order create failed:", e);
+  });
+}
+
+async function executeDueDcaOrdersInner(): Promise<DcaExecuteSummary> {
+  const empty = {
     processed: 0,
     advanced: 0,
     started: 0,
     failed: 0,
     skipped: 0,
-    results: [],
+    results: [] as DcaExecuteSummary["results"],
   };
+
+  const pending = await workPending();
+  if (
+    pending.inflightRows === 0 &&
+    pending.dueRows === 0 &&
+    pending.executing === 0
+  ) {
+    const nextExecutionAt = await soonestFutureExecutionAt(new Date());
+    return withWake({ ...empty, inflight: false, nextExecutionAt });
+  }
+
+  const summary = { ...empty };
 
   const inflight = await prisma.stacksDcaExecution.findMany({
     where: RECOVERABLE,
@@ -330,8 +475,7 @@ export async function executeDueDcaOrders(): Promise<DcaExecuteSummary> {
   const now = new Date();
   const due = await prisma.stacksDcaOrder.findMany({
     where: {
-      status: "active",
-      remainingOrders: { gt: 0 },
+      ...DUE_ORDER,
       OR: [{ nextExecutionAt: null }, { nextExecutionAt: { lte: now } }],
     },
     orderBy: { nextExecutionAt: "asc" },
@@ -339,13 +483,13 @@ export async function executeDueDcaOrders(): Promise<DcaExecuteSummary> {
   });
 
   for (const order of due) {
-    const pending = await prisma.stacksDcaExecution.findFirst({
+    const slicePending = await prisma.stacksDcaExecution.findFirst({
       where: {
         orderId: order.id,
         status: { in: ["pending_swap", "pending_payout"] },
       },
     });
-    if (pending) {
+    if (slicePending) {
       summary.skipped += 1;
       summary.results.push({
         orderId: order.id,
@@ -362,7 +506,7 @@ export async function executeDueDcaOrders(): Promise<DcaExecuteSummary> {
     summary.results.push({ orderId: order.id, ...r });
   }
 
-  return summary;
+  return attachWake(summary);
 }
 
 /** USDCx to refund on cancel: remaining slices that are not mid-swap. */
