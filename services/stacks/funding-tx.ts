@@ -33,22 +33,13 @@ export async function verifyUsdcxFundingTx(opts: {
   minAmountRaw: string;
 }): Promise<{ amountRaw: string }> {
   const keeper = getStacksKeeperAddress();
-  const id = normalizeTxId(opts.txId);
-  const res = await hiroFetch(`/extended/v1/tx/${id}`, {
-    network: "mainnet",
-    cacheTtlMs: 0,
-    retries: 3,
-  });
-  if (res.status === 404) {
+  const tx = await fetchHiroTx(opts.txId);
+  if (tx.tx_status === "not_found" || tx.tx_status == null) {
     throw new ServiceError(
       409,
       "Funding transaction is not on chain yet. Wait for it to confirm, then try again.",
     );
   }
-  if (!res.ok) {
-    throw new ServiceError(502, `Hiro API error (${res.status}) reading funding tx`);
-  }
-  const tx = (await res.json()) as HiroTx;
   if (tx.tx_status === "pending") {
     throw new ServiceError(
       409,
@@ -56,7 +47,7 @@ export async function verifyUsdcxFundingTx(opts: {
     );
   }
   if (tx.tx_status !== "success") {
-    throw new ServiceError(400, `Funding transaction failed (${tx.tx_status ?? "unknown"})`);
+    throw new ServiceError(400, `Funding transaction failed (${tx.tx_status})`);
   }
 
   const usdcx = usdcxToken("mainnet");
@@ -66,17 +57,33 @@ export async function verifyUsdcxFundingTx(opts: {
   let credited = BigInt(0);
 
   for (const ev of tx.events ?? []) {
-    if (ev.event_type !== "fungible_token_asset") continue;
-    if (ev.asset?.asset_event_type !== "transfer") continue;
-    const asset = (ev.asset.asset_id ?? "").toLowerCase();
+    const eventType = ev.event_type ?? "";
+    if (
+      eventType !== "fungible_token_asset" &&
+      eventType !== "ft_transfer_event"
+    ) {
+      continue;
+    }
+    if (ev.asset?.asset_event_type && ev.asset.asset_event_type !== "transfer") {
+      continue;
+    }
+    const asset = (ev.asset?.asset_id ?? "").toLowerCase();
     if (!asset.includes("usdcx") && asset !== wantAsset) continue;
-    if (ev.asset.sender !== from) continue;
-    if (ev.asset.recipient !== keeper) continue;
-    const amt = ev.asset.amount ?? "0";
+    const sender = ev.asset?.sender;
+    const recipient = ev.asset?.recipient;
+    if (sender !== from) continue;
+    if (recipient !== keeper) continue;
+    const amt = ev.asset?.amount ?? "0";
     if (/^\d+$/.test(amt)) credited += BigInt(amt);
   }
 
   if (credited < min) {
+    if ((tx.events?.length ?? 0) === 0) {
+      throw new ServiceError(
+        409,
+        "Funding transaction confirmed, waiting for Hiro to index the USDCx transfer.",
+      );
+    }
     throw new ServiceError(
       400,
       `Funding tx did not send enough USDCx to the PaySats keeper (got ${credited.toString()}, need ${opts.minAmountRaw})`,

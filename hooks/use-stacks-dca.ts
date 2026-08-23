@@ -10,6 +10,7 @@ import {
   usdcxToken,
   type StacksDcaIntervalId,
 } from "@/lib/stacks/config";
+import { fetchStacksTxStatus } from "@/lib/stacks/tx";
 import { buildSignedRequestMessage } from "@bitflowlabs/core-sdk";
 import { usePrivy } from "@privy-io/react-auth";
 import { openSignatureRequestPopup, request as stacksRequest } from "@stacks/connect";
@@ -296,7 +297,11 @@ export function useStacksDca(stacksAddress: string | null) {
         address: stacksAddress as `S${string}`,
       });
 
-      const id = result?.txid ?? null;
+      const id =
+        (typeof result?.txid === "string" && result.txid) ||
+        (typeof (result as { txId?: string })?.txId === "string" &&
+          (result as { txId: string }).txId) ||
+        null;
       if (!id) throw new Error("Wallet did not return a funding transaction id");
       const normalized = id.startsWith("0x") ? id : `0x${id}`;
       setFundingTxId(normalized);
@@ -341,8 +346,23 @@ export function useStacksDca(stacksAddress: string | null) {
               });
 
         setPhase("confirming");
+        const confirmDeadline = Date.now() + 180_000;
+        let fundingStatus = await fetchStacksTxStatus(txId, network);
+        while (fundingStatus === "pending" && Date.now() < confirmDeadline) {
+          await sleep(4_000);
+          fundingStatus = await fetchStacksTxStatus(txId, network);
+        }
+        if (fundingStatus === "failed") {
+          throw new Error("Funding transaction failed on Stacks");
+        }
+        if (fundingStatus !== "success") {
+          throw new Error(
+            "Funding is still confirming on Stacks. Wait a minute and tap Confirm again — you will not be charged twice.",
+          );
+        }
+
         let lastError = "Failed to create DCA order";
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < 8; i++) {
           const res = await fetchWithPrivy(
             tokenRef.current,
             "/api/stacks/dca/order",
@@ -375,7 +395,7 @@ export function useStacksDca(stacksAddress: string | null) {
           if (res.status !== 409) {
             throw new Error(lastError);
           }
-          await sleep(10_000);
+          await sleep(5_000);
         }
         throw new Error(
           lastError ||
@@ -398,6 +418,7 @@ export function useStacksDca(stacksAddress: string | null) {
       refreshOrders,
       fundingTxId,
       fundedAmountRaw,
+      network,
     ],
   );
 
