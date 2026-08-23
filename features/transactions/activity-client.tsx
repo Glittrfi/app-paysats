@@ -37,6 +37,16 @@ type StacksDcaTx = {
   createdAt: string;
 };
 
+type StacksZestTx = {
+  id: string;
+  txId: string;
+  network: string;
+  kind: string;
+  amountRaw: string;
+  status: string;
+  createdAt: string;
+};
+
 function BackHeader({ title }: { title: string }) {
   return (
     <div className="flex items-center gap-3 pt-12">
@@ -208,6 +218,7 @@ export function ActivityClient() {
   const [items, setItems] = useState<MintTransaction[] | null>(null);
   const [stacksSwaps, setStacksSwaps] = useState<StacksSwapTx[] | null>(null);
   const [stacksDca, setStacksDca] = useState<StacksDcaTx[] | null>(null);
+  const [stacksZest, setStacksZest] = useState<StacksZestTx[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
 
@@ -217,7 +228,7 @@ export function ActivityClient() {
     const q = new URLSearchParams({ page: "1", take: "20" });
     if (merchantOrderId) q.set("merchantOrderId", merchantOrderId);
 
-    const [mintRes, stacksRes, dcaRes] = await Promise.allSettled([
+    const [mintRes, stacksRes, dcaRes, zestRes] = await Promise.allSettled([
       (async () => {
         const res = await fetchWithPrivy(
           getAccessToken,
@@ -252,6 +263,17 @@ export function ActivityClient() {
         if (!res.ok) return [] as StacksDcaTx[];
         return j.orders ?? [];
       })(),
+      (async () => {
+        const res = await fetchWithPrivy(
+          getAccessToken,
+          "/api/stacks/zest/record",
+        );
+        const j = (await res.json().catch(() => ({}))) as {
+          txs?: StacksZestTx[];
+        };
+        if (!res.ok) return [] as StacksZestTx[];
+        return j.txs ?? [];
+      })(),
     ]);
 
     setReloading(false);
@@ -269,6 +291,7 @@ export function ActivityClient() {
       stacksRes.status === "fulfilled" ? stacksRes.value : [],
     );
     setStacksDca(dcaRes.status === "fulfilled" ? dcaRes.value : []);
+    setStacksZest(zestRes.status === "fulfilled" ? zestRes.value : []);
   }, [getAccessToken, merchantOrderId, t]);
 
   useEffect(() => {
@@ -285,10 +308,16 @@ export function ActivityClient() {
   type FeedRow =
     | { kind: "mint"; tx: MintTransaction; item: ActivityItem; sortAt: number }
     | { kind: "stacks"; swap: StacksSwapTx; item: ActivityItem; sortAt: number }
-    | { kind: "dca"; order: StacksDcaTx; item: ActivityItem; sortAt: number };
+    | { kind: "dca"; order: StacksDcaTx; item: ActivityItem; sortAt: number }
+    | { kind: "zest"; tx: StacksZestTx; item: ActivityItem; sortAt: number };
 
   const rows = useMemo(() => {
-    if (items === null && stacksSwaps === null && stacksDca === null) {
+    if (
+      items === null &&
+      stacksSwaps === null &&
+      stacksDca === null &&
+      stacksZest === null
+    ) {
       return null;
     }
     const tFn = t as (k: string) => string;
@@ -320,6 +349,47 @@ export function ActivityClient() {
             swap.status === "success"
               ? "accent"
               : swap.status === "failed"
+                ? "danger"
+                : "warning",
+        },
+      });
+    }
+
+    for (const z of stacksZest ?? []) {
+      const statusLabel =
+        z.status === "success"
+          ? t("tx.stacksSuccess")
+          : z.status === "failed"
+            ? t("tx.stacksFailed")
+            : t("tx.stacksPending");
+      const isSats =
+        z.kind === "collateral_add" || z.kind === "collateral_remove";
+      const title =
+        z.kind === "borrow"
+          ? t("tx.zestBorrow")
+          : z.kind === "repay"
+            ? t("tx.zestRepay")
+            : z.kind === "collateral_remove"
+              ? t("tx.zestWithdraw")
+              : t("tx.zestLock");
+      const amt = Number(z.amountRaw);
+      out.push({
+        kind: "zest",
+        tx: z,
+        sortAt: new Date(z.createdAt).getTime(),
+        item: {
+          id: `zest-${z.id}`,
+          type: "buy",
+          title,
+          subtitle: `${relativeTime(z.createdAt)} · ${statusLabel}`,
+          primary: isSats
+            ? `${z.kind === "collateral_remove" ? "+" : "−"}${formatUnit(amt)} ${unitLabel}`
+            : `${z.kind === "borrow" ? "+" : "−"}$${(amt / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+          secondary: "Zest",
+          tone:
+            z.status === "success"
+              ? "accent"
+              : z.status === "failed"
                 ? "danger"
                 : "warning",
         },
@@ -383,7 +453,7 @@ export function ActivityClient() {
 
     out.sort((a, b) => b.sortAt - a.sortAt);
     return out;
-  }, [items, stacksSwaps, stacksDca, t, localeStr, formatUnit, unitLabel]);
+  }, [items, stacksSwaps, stacksDca, stacksZest, t, localeStr, formatUnit, unitLabel]);
 
   return (
     <div className="px-5 pb-14">
@@ -439,6 +509,20 @@ export function ActivityClient() {
                   href={stacksExplorerTxUrl(
                     row.swap.txId,
                     row.swap.network === "testnet" ? "testnet" : "mainnet",
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block"
+                  data-pressable
+                >
+                  <ActivityRow item={row.item} />
+                </a>
+              ) : row.kind === "zest" ? (
+                <a
+                  key={row.item.id}
+                  href={stacksExplorerTxUrl(
+                    row.tx.txId,
+                    row.tx.network === "testnet" ? "testnet" : "mainnet",
                   )}
                   target="_blank"
                   rel="noreferrer"

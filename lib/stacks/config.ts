@@ -123,8 +123,7 @@ export const BITFLOW_HOSTS = {
     "https://keeper.bitflowapis.finance",
   /** Bitflow's `node.bitflowapis.finance` no longer resolves; Hiro is the same Stacks /v2 RPC. */
   READONLY_CALL_API_HOST:
-    process.env.NEXT_PUBLIC_READONLY_CALL_API_HOST ??
-    "https://api.hiro.so",
+    process.env.NEXT_PUBLIC_READONLY_CALL_API_HOST ?? "https://api.hiro.so",
 } as const;
 
 /**
@@ -149,6 +148,59 @@ export type StacksDcaIntervalId = (typeof STACKS_DCA_INTERVALS)[number]["id"];
 
 /** Bitflow routing/execution only exists on mainnet. */
 export function swapEnabled(
+  network: StacksNetworkId = stacksNetworkId(),
+): boolean {
+  return network === "mainnet";
+}
+
+// ---------------------------------------------------------------------------
+// Zest Protocol V2 (mainnet) — isolated sBTC collateral → USDCx borrow
+// ---------------------------------------------------------------------------
+
+export const ZEST_DEPLOYER =
+  "SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7";
+
+export const ZEST_CONTRACTS = {
+  // v0-market-vault.impl is v0-7-market (v0-4-market is retired and returns ERR-AUTH).
+  market: `${ZEST_DEPLOYER}.v0-7-market`,
+  marketVault: `${ZEST_DEPLOYER}.v0-market-vault`,
+  assets: `${ZEST_DEPLOYER}.v0-assets`,
+  egroup: `${ZEST_DEPLOYER}.v0-egroup`,
+  vaultSbtc: `${ZEST_DEPLOYER}.v0-vault-sbtc`,
+  vaultUsdc: `${ZEST_DEPLOYER}.v0-vault-usdc`,
+} as const;
+
+/** On-chain asset ids from v0-assets.find (sBTC = 0x02, USDCx = 0x06). */
+export const ZEST_ASSET_ID_SBTC = 2;
+export const ZEST_ASSET_ID_USDCX = 6;
+
+/** Pyth Core feed ids (Hermes) — used for off-chain USD quotes only. */
+export const PYTH_FEED_ID_BTC =
+  "0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
+export const PYTH_FEED_ID_USDC =
+  "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
+
+/**
+ * Pyth Pro (Lazer) integer feed ids. v0-7-market.verify-lazer-update
+ * keeps 1 = BTC, 7 = USDC, 45 = STX if present (does not require all three)
+ * and requires channel 3 or 4 (`fixed_rate@200ms` / `fixed_rate@1000ms`)
+ * with a single EVM buffer. Isolated sBTC → USDCx only attaches 1 and 7.
+ */
+export const PYTH_LAZER_FEED_BTC = 1;
+export const PYTH_LAZER_FEED_USDC = 7;
+export const PYTH_LAZER_FEED_STX = 45;
+
+/**
+ * UI borrow cap as a fraction of Zest's on-chain LTV-BORROW.
+ * sBTC → USDCx is 60% on-chain; 0.8 → ~48% displayed max.
+ */
+export const ZEST_MAX_BORROW_LTV_RATIO = 0.8;
+
+/** Max STX the user may spend on in-band Lazer verify (post-condition). */
+export const ZEST_PYTH_FEE_USTX_MAX = 10_000; // 0.01 STX; live fee is ~3 µSTX
+
+/** Zest V2 is deployed on mainnet only. */
+export function zestEnabled(
   network: StacksNetworkId = stacksNetworkId(),
 ): boolean {
   return network === "mainnet";
@@ -181,7 +233,9 @@ export function getStacksKeeperAddress(): string {
 export function getStacksKeeperPrivateKey(): string {
   const key = (process.env.STACKS_KEEPER_PRIVATE_KEY ?? "").trim();
   if (!/^(0x)?[0-9a-fA-F]{64}(01)?$/.test(key)) {
-    throw new Error("Set STACKS_KEEPER_PRIVATE_KEY to a hex Stacks private key");
+    throw new Error(
+      "Set STACKS_KEEPER_PRIVATE_KEY to a hex Stacks private key",
+    );
   }
   return key.startsWith("0x") ? key.slice(2) : key;
 }

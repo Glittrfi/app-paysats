@@ -56,6 +56,7 @@ model User {
   dcaExecutions       DcaExecution[]
   stacksSwaps         StacksSwap[]
   stacksDcaOrders     StacksDcaOrder[]
+  stacksZestTxs       StacksZestTx[]
 }
 
 /// Dynamically-registered MCP/OAuth client (RFC 7591). Claude registers itself
@@ -303,6 +304,29 @@ model StacksDcaExecution {
   @@unique([orderId, bitflowOrderId])
   @@index([orderId])
   @@index([txId])
+}
+
+/// Stacks Milestone 2: isolated sBTC collateral → USDCx borrow on Zest V2.
+/// Position state lives on-chain; this is the evidence trail of user-signed txs.
+model StacksZestTx {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stacksAddress String
+  txId          String    @unique
+  network       String // 'mainnet' | 'testnet'
+  /// collateral_add | borrow | repay | collateral_remove
+  kind          String
+  /// Amount in token minor units (sats for sBTC kinds, 6dp for USDCx kinds).
+  amountRaw     String
+  /// 'pending' | 'success' | 'failed'
+  status        String    @default("pending")
+  confirmedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([stacksAddress])
 }
 
 /// Optional local snapshot after mint / for quicker empty states; list view still uses IDRX history API.

@@ -242,11 +242,50 @@ Wake rules (from `nextWakeAt` on the execute response):
    kick) broadcasts swap; a later tick confirms and pays out sBTC.
 7. Cancel remaining (refunds 1 slice if the other is in flight).
 
+## Milestone 2 phase 2 — Zest borrow (isolated sBTC → USDCx)
+
+Lock sBTC as isolated collateral on Zest V2, then borrow Circle USDCx.
+Position state is on-chain; PaySats records each signed tx (`StacksZestTx`).
+
+### Contracts (mainnet)
+
+| Role | Contract |
+| --- | --- |
+| Market | `SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7.v0-7-market` |
+| Market vault | `…v0-market-vault` |
+| USDCx vault | `…v0-vault-usdc` |
+| sBTC token | `SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token` |
+| USDCx token | `SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx` |
+
+On-chain sBTC → USDCx LTV (live egroup, 2026-08): **60% borrow / 70% partial liq / 75% full**. The UI caps borrow at **80% of LTV-borrow** (~48%).
+
+Writes (user-signed, `PostConditionMode.Deny`):
+
+1. `collateral-add(sBTC, amount, price-feeds)` — lock isolated sats
+2. `borrow(USDCx, amount, none, price-feeds)` — USDCx from `v0-vault-usdc`
+3. `repay(USDCx, amount, none)`
+4. `collateral-remove(sBTC, amount, none, price-feeds)`
+
+Opening a line is **two wallet prompts back to back**. Stacks applies
+them in nonce order, so the lock is executed before borrow without
+waiting for confirmation. Hot-path calls attach **one** Pyth Pro (Lazer)
+EVM update (`fixed_rate@200ms`, feeds 1/7; STX 45 is optional). Hermes PNAU is rejected
+(`err u400022`). Requires `PYTH_API_KEY`. Writes go to `v0-7-market`.
+
+### Borrow demo checklist
+
+1. `npx prisma migrate deploy` (adds `StacksZestTx`).
+2. Sign in → `/stacks` → connect wallet with sBTC + STX for gas.
+3. Enter sats to lock and a USDCx amount under the UI cap. Review LTV / liq price.
+4. Approve lock, then borrow. Both txs on Hiro Explorer; USDCx lands in the wallet.
+5. Repay (partial or all), then withdraw sBTC. Position returns to empty.
+
 ## Known limitations
 
 - Bitflow routing is mainnet-only.
 - Prepaid USDCx is custodial on the PaySats keeper until swapped or
   refunded.
 - The Stacks wallet is external (Leather/Xverse), not Privy embedded.
-- Zest borrow is Milestone 2 phase 2 (not in this DCA ship).
+- Isolated Zest collateral is not yield-bearing (no zsBTC). Yield mode can
+  come later.
 - Agent-initiated Stacks flows land in Milestone 3.

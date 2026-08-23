@@ -178,8 +178,23 @@ from a PaySats-owned Stacks address:
 See `docs/stacks-pilot.md` for the checklist, env vars, and why Bitflow
 Keepers were dropped for this pair.
 
+## Milestone 2 (Zest) — isolated sBTC collateral → USDCx borrow
+
+Zest V2 market `SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7.v0-7-market`.
+USDCx is Circle's token (`SP120…usdcx`), not legacy aeUSDC.
+
+1. Read live LTV from `v0-egroup.resolve` (sBTC bit 2 + USDCx debt bit 70).
+2. Fetch one Pyth Pro (Lazer) EVM update and pass it as
+   `(optional (list 3 (buff 8192)))` with length 1 on hot-path calls.
+3. User signs `collateral-add` then `borrow` via `@stacks/connect`
+   `stx_callContract` (two prompts back to back; Stacks has no batch).
+4. Post-conditions: user sends sBTC on lock; `v0-vault-usdc` sends USDCx
+   on borrow; user sends USDCx on repay; `v0-market-vault` sends sBTC
+   on withdraw. `PostConditionMode.Deny`.
+5. UI caps borrow at 80% of on-chain LTV-borrow (~48% vs 60%).
+
 ## What's next
 
-- **Milestone 2 (remaining):** borrow against sBTC on Zest.
 - **Milestone 3:** MCP agent tools so AI agents can operate the Stacks
-  account with human-approved payments, live on mainnet.
+  account with human-approved payments (including Zest borrow), live on
+  mainnet.

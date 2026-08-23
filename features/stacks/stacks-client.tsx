@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { GradButton } from "@/components/ui/grad-button";
 import { InlinePanel } from "@/components/ui/inline-panel";
 import { PillSeg } from "@/components/ui/pill-seg";
+import { ZestBorrowCard } from "@/features/stacks/zest-borrow-card";
 import { useStacksBalances } from "@/hooks/use-stacks-balances";
 import {
   useStacksDca,
@@ -1403,22 +1404,25 @@ function RecentSwaps({ refreshKey }: { refreshKey: number }) {
 function PilotTradeCard({
   address,
   usdcxBalance,
+  sbtcSats,
   onChanged,
 }: {
   address: string;
   usdcxBalance: number | null;
+  sbtcSats: number | null;
   onChanged: () => void;
 }) {
-  const [mode, setMode] = useState<"swap" | "dca">("dca");
+  const [mode, setMode] = useState<"swap" | "dca" | "borrow">("dca");
 
   return (
     <Card className="space-y-4">
-      <PillSeg<"swap" | "dca">
+      <PillSeg<"swap" | "dca" | "borrow">
         value={mode}
         onChange={setMode}
         options={[
-          { value: "dca", label: "Recurring DCA" },
+          { value: "dca", label: "DCA" },
           { value: "swap", label: "Swap" },
+          { value: "borrow", label: "Borrow" },
         ]}
       />
       {mode === "swap" ? (
@@ -1426,6 +1430,14 @@ function PilotTradeCard({
           address={address}
           usdcxBalance={usdcxBalance}
           onSwapSettled={onChanged}
+          embedded
+        />
+      ) : mode === "borrow" ? (
+        <ZestBorrowCard
+          address={address}
+          sbtcSats={sbtcSats}
+          usdcxBalance={usdcxBalance}
+          onChanged={onChanged}
           embedded
         />
       ) : (
@@ -1475,6 +1487,7 @@ export function StacksClient() {
               <PilotTradeCard
                 address={wallet.address!}
                 usdcxBalance={balances?.usdcx ?? null}
+                sbtcSats={balances?.sbtcSats ?? null}
                 onChanged={onSwapSettled}
               />
             ) : (
@@ -1504,7 +1517,8 @@ export function StacksClient() {
         <p className="text-[10px]" style={{ color: "var(--paysats-text-faint)" }}>
           Native BTC rail funded by the Stacks Endowment. sBTC is Bitcoin-settled
           and 1:1 backed; USDCx is a Circle USDC-backed dollar via xReserve.
-          One-shot swaps and recurring DCA route through Bitflow.
+          One-shot swaps and recurring DCA route through Bitflow. Borrow USDCx
+          against isolated sBTC on Zest.
         </p>
       </div>
     </div>

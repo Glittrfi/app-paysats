@@ -55,6 +55,15 @@ type StacksSwapTx = {
   createdAt: string;
 };
 
+type StacksZestTx = {
+  id: string;
+  txId: string;
+  kind: string;
+  amountRaw: string;
+  status: string;
+  createdAt: string;
+};
+
 function greetKey() {
   const h = new Date().getHours();
   if (h < 11) return "home.greet.morning";
@@ -507,6 +516,7 @@ export function DashboardClient() {
   // Activity feed: Stacks swaps + mint transactions, newest first.
   const [mintTx, setMintTx] = useState<MintTx[] | null>(null);
   const [stacksSwaps, setStacksSwaps] = useState<StacksSwapTx[] | null>(null);
+  const [stacksZest, setStacksZest] = useState<StacksZestTx[] | null>(null);
   const tokenRef = useRef(getAccessToken);
   useLayoutEffect(() => {
     tokenRef.current = getAccessToken;
@@ -514,7 +524,7 @@ export function DashboardClient() {
 
   const loadTx = useCallback(async () => {
     const tokenFn = tokenRef.current;
-    const [mintRes, stacksRes] = await Promise.allSettled([
+    const [mintRes, stacksRes, zestRes] = await Promise.allSettled([
       (async () => {
         const q = new URLSearchParams({ page: "1", take: "10" }).toString();
         const res = await fetchWithPrivy(tokenFn, `/api/idrx/transactions?${q}`);
@@ -530,9 +540,17 @@ export function DashboardClient() {
         };
         return j.swaps ?? [];
       })(),
+      (async () => {
+        const res = await fetchWithPrivy(tokenFn, "/api/stacks/zest/record");
+        const j = (await res.json().catch(() => ({}))) as {
+          txs?: StacksZestTx[];
+        };
+        return j.txs ?? [];
+      })(),
     ]);
     setMintTx(mintRes.status === "fulfilled" ? mintRes.value : []);
     setStacksSwaps(stacksRes.status === "fulfilled" ? stacksRes.value : []);
+    setStacksZest(zestRes.status === "fulfilled" ? zestRes.value : []);
   }, []);
 
   useEffect(() => {
@@ -584,6 +602,43 @@ export function DashboardClient() {
       });
     }
 
+    for (const z of stacksZest ?? []) {
+      const statusLabel =
+        z.status === "success"
+          ? t("tx.stacksSuccess")
+          : z.status === "failed"
+            ? t("tx.stacksFailed")
+            : t("tx.stacksPending");
+      const isSats =
+        z.kind === "collateral_add" || z.kind === "collateral_remove";
+      const title =
+        z.kind === "borrow"
+          ? t("tx.zestBorrow")
+          : z.kind === "repay"
+            ? t("tx.zestRepay")
+            : z.kind === "collateral_remove"
+              ? t("tx.zestWithdraw")
+              : t("tx.zestLock");
+      const amt = Number(z.amountRaw);
+      items.push({
+        id: `zest-${z.id}`,
+        type: "loan",
+        title,
+        subtitle: `${relativeTime(z.createdAt)} · ${statusLabel}`,
+        primary: isSats
+          ? `${z.kind === "collateral_remove" ? "+" : "−"}${formatUnit(amt)} ${unitLabel}`
+          : `${z.kind === "borrow" ? "+" : "−"}$${(amt / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+        tone:
+          z.status === "success"
+            ? "accent"
+            : z.status === "failed"
+              ? "danger"
+              : "warning",
+        at: z.createdAt,
+        sortAt: new Date(z.createdAt).getTime(),
+      });
+    }
+
     for (const tx of mintTx ?? []) {
       const idr = tx.paymentAmount ?? 0;
       items.push({
@@ -601,9 +656,9 @@ export function DashboardClient() {
 
     items.sort((a, b) => b.sortAt - a.sortAt);
     return items.slice(0, 8);
-  }, [mintTx, stacksSwaps, t, formatUnit, unitLabel]);
+  }, [mintTx, stacksSwaps, stacksZest, t, formatUnit, unitLabel]);
 
-  const activityLoading = mintTx === null && stacksSwaps === null;
+  const activityLoading = mintTx === null && stacksSwaps === null && stacksZest === null;
 
   if (!ready || !authenticated) return null;
 
