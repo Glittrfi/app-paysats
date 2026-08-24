@@ -21,7 +21,8 @@ import {
 } from "@/lib/stacks/zest-credit";
 import { ServiceError } from "@/services/errors";
 import { fetchPythSpotPrices } from "@/services/stacks/pyth";
-import { Cl, cvToJSON, cvToValue, type ClarityValue } from "@stacks/transactions";
+import { Cl } from "@/lib/stacks/cl";
+import { cvToJSON, cvToValue, type ClarityValue } from "@stacks/transactions";
 
 export type ZestRiskParams = {
   ltvBorrowBps: number;

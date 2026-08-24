@@ -1,6 +1,7 @@
 "use client";
 
 import { fetchWithPrivy } from "@/lib/api";
+import { Cl, Pc } from "@/lib/stacks/cl";
 import {
   BITFLOW_TOKEN_ID_USDCX,
   STACKS_DCA_INTERVALS,
@@ -14,7 +15,6 @@ import { fetchStacksTxStatus } from "@/lib/stacks/tx";
 import { buildSignedRequestMessage } from "@bitflowlabs/core-sdk";
 import { usePrivy } from "@privy-io/react-auth";
 import { openSignatureRequestPopup, request as stacksRequest } from "@stacks/connect";
-import { Cl, Pc } from "@stacks/transactions";
 import {
   useCallback,
   useEffect,

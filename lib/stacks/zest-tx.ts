@@ -5,7 +5,8 @@ import {
   usdcxToken,
   type StacksNetworkId,
 } from "@/lib/stacks/config";
-import { Cl, Pc, type ClarityValue } from "@stacks/transactions";
+import { Cl, Pc } from "@/lib/stacks/cl";
+import type { ClarityValue } from "@stacks/transactions";
 
 export type ZestTxKind =
   | "collateral_add"

@@ -12,12 +12,8 @@ import { ServiceError } from "@/services/errors";
 import { getBitflowSdk, getUsdcxToSbtcQuote } from "@/services/stacks/bitflow";
 import { fetchHiroTx, sbtcReceivedByAddress } from "@/services/stacks/funding-tx";
 import { STACKS_MAINNET } from "@stacks/network";
-import {
-  Cl,
-  Pc,
-  broadcastTransaction,
-  makeContractCall,
-} from "@stacks/transactions";
+import { Cl, Pc } from "@/lib/stacks/cl";
+import { broadcastTransaction, makeContractCall } from "@stacks/transactions";
 
 export type BroadcastResult = { txId: string };
 
