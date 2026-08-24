@@ -1,13 +1,14 @@
 /**
- * Production-safe Cl / Pc helpers.
+ * Production-safe Clarity value + post-condition builders.
  *
- * `@stacks/transactions` re-exports them as `export * as Cl from './cl'`.
- * Next.js production webpack + `sideEffects: false` tree-shakes that
- * namespace, so `Cl.uint` is undefined (`c.Cl.uint is not a function`).
- * Turbopack in `next dev` keeps the namespace, which is why DCA works
- * locally and fails in production.
+ * `@stacks/transactions` ships `Cl` and `Pc` as namespace re-exports
+ * (`export * as Cl from './cl'`). Production bundlers can drop members of
+ * those namespace objects, so `Cl.uint` / `Cl.serialize` end up undefined in
+ * a production build while `next dev` works fine. Named exports
+ * (`uintCV`, …) and plain post-condition objects have no such problem.
  *
- * Named clarity builders (`uintCV`, …) are real exports and survive minify.
+ * `@stacks/connect` has the same issue internally; see
+ * `patches/@stacks+connect+8.2.6.patch`.
  */
 import {
   bufferCV,
@@ -17,8 +18,13 @@ import {
   principalCV,
   someCV,
   uintCV,
+  type AssetString,
+  type FungiblePostCondition,
+  type StxPostCondition,
 } from "@stacks/transactions";
-import { principal as pcPrincipal } from "@stacks/transactions/dist/pc";
+
+type Comparator = "eq" | "gt" | "gte" | "lt" | "lte";
+type Amount = bigint | number | string;
 
 function bufferFromHex(hex: string) {
   const h = hex.replace(/^0x/i, "");
@@ -42,6 +48,32 @@ export const Cl = {
   bufferFromHex,
 };
 
+function amountStep(address: string, condition: Comparator) {
+  return (amount: Amount) => ({
+    ustx: (): StxPostCondition => ({
+      type: "stx-postcondition",
+      address,
+      condition,
+      amount,
+    }),
+    ft: (contractId: string, tokenName: string): FungiblePostCondition => ({
+      type: "ft-postcondition",
+      address,
+      condition,
+      amount,
+      asset: `${contractId}::${tokenName}` as AssetString,
+    }),
+  });
+}
+
 export const Pc = {
-  principal: pcPrincipal,
+  principal(address: string) {
+    return {
+      willSendEq: amountStep(address, "eq"),
+      willSendGt: amountStep(address, "gt"),
+      willSendGte: amountStep(address, "gte"),
+      willSendLt: amountStep(address, "lt"),
+      willSendLte: amountStep(address, "lte"),
+    };
+  },
 };
