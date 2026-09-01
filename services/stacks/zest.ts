@@ -240,6 +240,50 @@ async function readCollateralAndDebt(
   return { collateralSats, debtUsdcxRaw };
 }
 
+const MARKET_IMPL_TTL_MS = 5 * 60_000;
+let marketImplCheckedAt = 0;
+
+/**
+ * Zest ships new market contracts and deauthorizes the previous one on the
+ * asset vaults (v0-4 → v0-7 → v0-8). Reads go through the shared
+ * `v0-market-vault` and keep working, so a stale `ZEST_CONTRACTS.market`
+ * only shows up as `err u803001` after the user has paid tx fees. Fail the
+ * whole borrow surface instead, loudly and before anything is signed.
+ */
+async function assertZestMarketIsCurrent(
+  sender: string,
+  network: StacksNetworkId,
+): Promise<void> {
+  if (Date.now() - marketImplCheckedAt < MARKET_IMPL_TTL_MS) return;
+
+  let onChain: string;
+  try {
+    const cv = await callReadOnlyFunction({
+      contract: ZEST_CONTRACTS.marketVault,
+      functionName: "get-impl",
+      functionArgs: [],
+      sender,
+      network,
+    });
+    onChain = String(cvToValue(cv) ?? "").trim();
+  } catch {
+    // A Hiro hiccup should not take down the borrow UI; the other reads in
+    // this request will surface it if the node is genuinely unreachable.
+    return;
+  }
+
+  if (!onChain) return;
+  if (onChain.toLowerCase() !== ZEST_CONTRACTS.market.toLowerCase()) {
+    throw new ServiceError(
+      503,
+      `Zest migrated its market to ${onChain}; PaySats is configured for ` +
+        `${ZEST_CONTRACTS.market}, whose writes now fail with err u803001. ` +
+        "Update ZEST_CONTRACTS.market to match v0-market-vault.get-impl.",
+    );
+  }
+  marketImplCheckedAt = Date.now();
+}
+
 export async function getZestPosition(
   address: string,
   network: StacksNetworkId = stacksNetworkId(),
@@ -252,6 +296,7 @@ export async function getZestPosition(
     fetchPythSpotPrices(),
     readRiskParams(address, network),
     readCollateralAndDebt(address, network),
+    assertZestMarketIsCurrent(address, network),
   ]);
 
   const { collateralSats, debtUsdcxRaw } = balances;
