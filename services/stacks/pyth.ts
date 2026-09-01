@@ -6,7 +6,23 @@ import {
 } from "@/lib/stacks/config";
 import { ServiceError } from "@/services/errors";
 
-const HERMES_BASE = "https://hermes.pyth.network";
+/**
+ * Since the Pyth Core upgrade (2026-08-26) every Hermes request needs a Pyth
+ * API key; the legacy unauthenticated `hermes.pyth.network` host answers 401.
+ */
+const HERMES_BASE = (
+  process.env.PYTH_HERMES_BASE ?? "https://pyth.dourolabs.app/hermes"
+).replace(/\/+$/, "");
+
+function pythApiKey(): string | null {
+  const key = (
+    process.env.PYTH_API_KEY ??
+    process.env.PYTH_LAZER_API_KEY ??
+    process.env.PYTH_PRO_API_KEY ??
+    ""
+  ).trim();
+  return key.length > 0 ? key : null;
+}
 
 export type PythSpotPrices = {
   btcUsd: number;
@@ -36,13 +52,25 @@ export async function fetchPythSpotPrices(): Promise<PythSpotPrices> {
     .map((id) => `ids[]=${encodeURIComponent(id)}`)
     .join("&");
   const url = `${HERMES_BASE}/v2/updates/price/latest?${ids}&encoding=hex&parsed=true`;
+  const token = pythApiKey();
+  if (!token) {
+    throw new ServiceError(
+      500,
+      "Set PYTH_API_KEY — Pyth Hermes requires an API key since 2026-08-26",
+    );
+  }
 
   const res = await fetch(url, {
     cache: "no-store",
     signal: AbortSignal.timeout(12_000),
+    headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
-    throw new ServiceError(502, `Hermes price fetch failed (${res.status})`);
+    const detail = (await res.text().catch(() => "")).slice(0, 120);
+    throw new ServiceError(
+      502,
+      `Hermes price fetch failed (${res.status})${detail ? `: ${detail}` : ""}`,
+    );
   }
 
   const json = (await res.json()) as HermesResponse;
@@ -63,16 +91,6 @@ export async function fetchPythSpotPrices(): Promise<PythSpotPrices> {
 const LAZER_REST = "https://pyth-lazer.dourolabs.app/v1/latest_price";
 /** EVM Lazer envelope magic `0x2a22999a` (see stx-labs/stacks-pyth-lazer). */
 const LAZER_EVM_MAGIC = "2a22999a";
-
-function pythLazerApiKey(): string | null {
-  const key = (
-    process.env.PYTH_API_KEY ??
-    process.env.PYTH_LAZER_API_KEY ??
-    process.env.PYTH_PRO_API_KEY ??
-    ""
-  ).trim();
-  return key.length > 0 ? key : null;
-}
 
 function extractLazerEvmHex(json: unknown): string | null {
   const fromEvm = (o: Record<string, unknown>): string | null => {
@@ -112,7 +130,7 @@ function extractLazerEvmHex(json: unknown): string | null {
  * Hermes PNAU is rejected on-chain (err u400022).
  */
 export async function fetchPythPriceFeedHexes(): Promise<string[]> {
-  const token = pythLazerApiKey();
+  const token = pythApiKey();
   if (!token) {
     throw new ServiceError(
       500,
