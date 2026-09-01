@@ -8,7 +8,7 @@ import type { NextRequest } from "next/server";
 /**
  * GET /api/stacks/zest/price-feeds
  *
- * One Pyth Pro (Lazer) EVM update for v0-7-market in-band oracle.
+ * One Pyth Pro (Lazer) EVM update for the Zest market in-band oracle.
  */
 export async function GET(request: NextRequest) {
   const privyUser = await getPrivyUserFromRequest(request);

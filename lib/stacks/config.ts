@@ -161,8 +161,10 @@ export const ZEST_DEPLOYER =
   "SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7";
 
 export const ZEST_CONTRACTS = {
-  // v0-market-vault.impl is v0-7-market (v0-4-market is retired and returns ERR-AUTH).
-  market: `${ZEST_DEPLOYER}.v0-7-market`,
+  // Must track `v0-market-vault.get-impl`. Zest migrates this on each market
+  // release and deauthorizes the old one on the vaults, so a stale value fails
+  // every write with the vault's ERR-AUTH (`err u803001`) — v0-4 then v0-7.
+  market: `${ZEST_DEPLOYER}.v0-8-market`,
   marketVault: `${ZEST_DEPLOYER}.v0-market-vault`,
   assets: `${ZEST_DEPLOYER}.v0-assets`,
   egroup: `${ZEST_DEPLOYER}.v0-egroup`,
@@ -181,7 +183,7 @@ export const PYTH_FEED_ID_USDC =
   "0xeaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a";
 
 /**
- * Pyth Pro (Lazer) integer feed ids. v0-7-market.verify-lazer-update
+ * Pyth Pro (Lazer) integer feed ids. The market's verify-lazer-update
  * keeps 1 = BTC, 7 = USDC, 45 = STX if present (does not require all three)
  * and requires channel 3 or 4 (`fixed_rate@200ms` / `fixed_rate@1000ms`)
  * with a single EVM buffer. Isolated sBTC → USDCx only attaches 1 and 7.

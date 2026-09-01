@@ -126,7 +126,7 @@ function extractLazerEvmHex(json: unknown): string | null {
 }
 
 /**
- * One Pyth Pro (Lazer) EVM update for Zest v0-7-market.
+ * One Pyth Pro (Lazer) EVM update for the Zest market.
  * Hermes PNAU is rejected on-chain (err u400022).
  */
 export async function fetchPythPriceFeedHexes(): Promise<string[]> {

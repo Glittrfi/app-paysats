@@ -35,7 +35,7 @@ function tokenPrincipalCv(
 /** Build optional Pyth price-feeds arg for Zest hot-path calls. */
 export function zestPriceFeedsCv(hexBuffers: string[]): ClarityValue {
   if (!hexBuffers.length) return Cl.none();
-  // v0-7-market.load-price-feeds asserts the list length is exactly 1.
+  // The market's load-price-feeds asserts the list length is exactly 1.
   const bufs = hexBuffers.slice(0, 1).map((h) => {
     const hex = h.replace(/^0x/i, "");
     if (hex.length / 2 > 8192) {

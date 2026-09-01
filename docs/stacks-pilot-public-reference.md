@@ -180,7 +180,8 @@ Keepers were dropped for this pair.
 
 ## Milestone 2 (Zest) — isolated sBTC collateral → USDCx borrow
 
-Zest V2 market `SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7.v0-7-market`.
+Zest V2 market `SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7.v0-8-market`
+(tracks `v0-market-vault.get-impl`).
 USDCx is Circle's token (`SP120…usdcx`), not legacy aeUSDC.
 
 1. Read live LTV from `v0-egroup.resolve` (sBTC bit 2 + USDCx debt bit 70).

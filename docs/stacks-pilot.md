@@ -251,7 +251,7 @@ Position state is on-chain; PaySats records each signed tx (`StacksZestTx`).
 
 | Role | Contract |
 | --- | --- |
-| Market | `SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7.v0-7-market` |
+| Market | `SP1A27KFY4XERQCCRCARCYD1CC5N7M6688BSYADJ7.v0-8-market` |
 | Market vault | `…v0-market-vault` |
 | USDCx vault | `…v0-vault-usdc` |
 | sBTC token | `SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token` |
@@ -270,7 +270,13 @@ Opening a line is **two wallet prompts back to back**. Stacks applies
 them in nonce order, so the lock is executed before borrow without
 waiting for confirmation. Hot-path calls attach **one** Pyth Pro (Lazer)
 EVM update (`fixed_rate@200ms`, feeds 1/7; STX 45 is optional). Hermes PNAU is rejected
-(`err u400022`). Requires `PYTH_API_KEY`. Writes go to `v0-7-market`.
+(`err u400022`). Requires `PYTH_API_KEY`.
+
+Writes go to whichever market `v0-market-vault.get-impl` returns — Zest
+deauthorizes the previous market on the vaults when it ships a new one, so a
+stale `ZEST_CONTRACTS.market` fails every write with `err u803001` (the
+vault's `ERR-AUTH`) while reads keep working. Check `get-impl` first when
+borrow or repay starts failing; it moved v0-4 → v0-7 → v0-8 (2026-08-31).
 
 ### Borrow demo checklist
 
