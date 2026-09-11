@@ -288,9 +288,10 @@ borrow or repay starts failing; it moved v0-4 → v0-7 → v0-8 (2026-08-31).
 
 ## Milestone 3 — MCP agent account (sBTC DCA + Zest)
 
-Stacks has no Privy device-auth equivalent, so Claude cannot sign Leather.
-Each user gets a **Stacks agent account** PaySats can sign for. The user
-funds it; the agent DCA / borrows / withdraws from that balance.
+Claude connects with **Leather / Xverse OAuth** (message signature, no
+Privy). Claude still cannot sign the user's Leather wallet; each user gets a
+**Stacks agent account** PaySats can sign for. The user funds it; the agent
+DCA / borrows / withdraws from that balance.
 
 - **Generated (default):** new keypair, secret encrypted with `ENCRYPTION_KEY`.
   A small STX top-up is sent from the PaySats keeper so the first fee is paid.
@@ -321,13 +322,12 @@ agent address. Evidence: `StacksAgentAction` rows.
 1. `npx prisma migrate deploy`
 2. Sign in → `/stacks` → **Create agent account**. Copy the address.
 3. Send a little USDCx + sBTC + STX to that address (or let the STX top-up land).
-4. Connect Claude to `https://stxmcp.paysats.exchange/mcp` (OAuth with the
-   same Google account). Copy the snippet from the agent card. Leave
-   `privymcp.paysats.exchange` for Base / Privy tools.
-   Stacks approval opens **https://stx.paysats.exchange/verification** (not
-   `app.paysats.exchange`). Production: `git pull && npm run build && pm2
-   restart paysats-v2-mcp` on the MCP host, and deploy the app to Vercel so
-   `stx.paysats.exchange` has the Stacks copy.
+4. Connect Claude to `https://stxmcp.paysats.exchange/mcp`. Approve with
+   **Leather / Xverse** (message signature). This is not Google / Privy —
+   leave `privymcp.paysats.exchange` for Base / Privy tools.
+   Production keeps two MCP processes: privymcp → `paysats-v2-mcp` (`:3400`,
+   Base), stxmcp → `paysats-stxmcp` (`:3500`, this repo, `MCP_PRODUCT=stacks`).
+   After git pull: `npm run build && pm2 restart paysats-stxmcp`.
    Smoke test: `curl -sI https://stxmcp.paysats.exchange/mcp` should be **401**
    JSON (`invalid_token`), not an HTML 404.
 5. `get_account` — confirm `stacks.agentAddress` and balances.
@@ -344,7 +344,7 @@ services/stacks/signer.ts           per-address nonce lock + SIP-010 / STX
 services/stacks/agent-wallet.ts     generate / import / encrypt key
 services/stacks/agent-actions.ts   setup_dca / cancel / borrow / withdraw
 services/mcp/stacks-account.ts     get_account stacks payload
-app/mcp/route.ts                   public /mcp (Host picks Stacks vs Base)
+app/mcp/route.ts                   public /mcp (stxmcp process is Stacks-only)
 app/api/stxmcp/[transport]/route.ts  Stacks agent tools
 app/api/mcp/[transport]/route.ts     Base / Privy tools
 app/api/stacks/agent/wallet|withdraw

@@ -25,6 +25,7 @@
     "@privy-io/react-auth": "^3.21.2",
     "@privy-io/server-auth": "^1.32.5",
     "@stacks/connect": "^8.2.6",
+    "@stacks/encryption": "^7.6.0",
     "@stacks/network": "^7.5.0",
     "@stacks/transactions": "^7.5.0",
     "mcp-handler": "^1.1.0",

@@ -1,27 +1,19 @@
 import { createPendingAuth, getClient } from "@/services/oauth/store";
-import {
-  baseAppPublicUrl,
-  isStacksMcpRequest,
-  stacksAppPublicUrl,
-} from "@/services/mcp/host";
+import { baseAppPublicUrl, isStacksMcpRequest } from "@/services/mcp/host";
 import { requestDeviceCode } from "@/services/privy/device-auth";
 import { getPublicOrigin } from "mcp-handler";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * OAuth 2.1 authorization endpoint (bridged onto Privy's device-authorization
- * grant). Validates the client + PKCE params, starts a Privy device
- * authorization, persists the device/user codes against a pending-auth handle,
- * then redirects the user's browser to the hosted Verification page
- * (app.paysats.exchange for Base, stx.paysats.exchange for Stacks). After
- * approval the page returns to /api/oauth/device-complete.
+ * OAuth 2.1 authorization endpoint.
+ *
+ * Stacks MCP: Leather / Xverse signature on /verification. No Privy.
+ * Base MCP: Privy device-authorization grant (Google), hosted on
+ * app.paysats.exchange.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  // Behind nginx, req.url reflects the internal address — derive the public
-  // origin (https://privymcp.paysats.exchange) from forwarded headers so the
-  // verification page returns to a publicly reachable callback.
   const origin = getPublicOrigin(req);
 
   const responseType = searchParams.get("response_type");
@@ -50,7 +42,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "invalid_redirect_uri" }, { status: 400 });
   }
 
-  // Start the Privy device authorization. The agent (this server) is the device.
+  const stacks = isStacksMcpRequest(req);
+  const complete = `${origin}/api/oauth/device-complete`;
+
+  if (stacks) {
+    const { handle } = await createPendingAuth({
+      clientId,
+      redirectUri,
+      codeChallenge,
+      codeChallengeMethod,
+      scope,
+      clientState: state,
+    });
+    // Host approval on this MCP origin so OAuth never depends on Privy or
+    // the Vercel product app.
+    const verifyUrl = new URL("/verification", origin);
+    verifyUrl.searchParams.set("handle", handle);
+    verifyUrl.searchParams.set("complete", complete);
+    verifyUrl.searchParams.set("flavor", "stacks");
+    return NextResponse.redirect(verifyUrl);
+  }
+
   let device;
   try {
     device = await requestDeviceCode();
@@ -69,28 +81,19 @@ export async function GET(req: NextRequest) {
     userCode: device.userCode,
   });
 
-  // Privy's dashboard Verification URI is a single URL (app.paysats.exchange).
-  // For the Stacks MCP, rewrite that origin to stx.paysats.exchange so the
-  // approval page is the Stacks app, not the Base/IDRX app.
-  const stacks = isStacksMcpRequest(req);
-  const verifyUrl = buildVerificationUrl(
+  const verifyUrl = buildBaseVerificationUrl(
     device.verificationUriComplete,
     device.userCode,
-    stacks,
   );
   verifyUrl.searchParams.set("handle", handle);
-  verifyUrl.searchParams.set("complete", `${origin}/api/oauth/device-complete`);
-  verifyUrl.searchParams.set("flavor", stacks ? "stacks" : "base");
+  verifyUrl.searchParams.set("complete", complete);
+  verifyUrl.searchParams.set("flavor", "base");
 
   return NextResponse.redirect(verifyUrl);
 }
 
-function buildVerificationUrl(
-  complete: string,
-  userCode: string,
-  stacks: boolean,
-): URL {
-  const base = stacks ? stacksAppPublicUrl() : baseAppPublicUrl();
+function buildBaseVerificationUrl(complete: string, userCode: string): URL {
+  const base = baseAppPublicUrl();
   let fromPrivy: URL | null = null;
   if (complete) {
     try {

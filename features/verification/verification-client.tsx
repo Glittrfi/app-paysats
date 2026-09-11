@@ -10,18 +10,17 @@ type Phase = "init" | "login" | "ready" | "working" | "done" | "denied" | "error
 
 /**
  * Hosted browser approval page for Privy's device-authorization grant.
- * Base MCP → app.paysats.exchange; Stacks MCP → stx.paysats.exchange.
+ * Base / Privy MCP only (app.paysats.exchange). Stacks MCP uses
+ * StacksVerificationClient (Leather, no Privy).
  */
 export function VerificationClient({
   userCode,
   handle,
   complete,
-  stacks,
 }: {
   userCode: string | null;
   handle: string | null;
   complete: string | null;
-  stacks: boolean;
 }) {
   const { ready, authenticated, getAccessToken } = usePrivy();
   const { initOAuth } = useLoginWithOAuth();
@@ -87,9 +86,9 @@ export function VerificationClient({
   const onApprove = useCallback(async () => {
     if (!valid) return;
     setPhase("working");
-    setMessage(stacks ? "Connecting your Stacks account…" : "Preparing your wallet…");
+    setMessage("Preparing your wallet…");
     try {
-      await sync({ skipIdrx: stacks }).catch(() => undefined);
+      await sync().catch(() => undefined);
       setMessage("Granting agent access…");
       await deviceVerify("approve");
       setPhase("done");
@@ -98,7 +97,7 @@ export function VerificationClient({
       setPhase("error");
       setMessage(e instanceof Error ? e.message : "Something went wrong.");
     }
-  }, [valid, stacks, sync, deviceVerify, returnToMcp]);
+  }, [valid, sync, deviceVerify, returnToMcp]);
 
   const onDeny = useCallback(async () => {
     if (!valid) return;
@@ -134,23 +133,12 @@ export function VerificationClient({
         }}
       >
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
-          {stacks ? "Verify Stacks agent access" : "Verify agent access"}
+          Verify agent access
         </h1>
         <p style={{ fontSize: 14, lineHeight: 1.5, color: "#6b5c4d", marginBottom: 12 }}>
-          {stacks ? (
-            <>
-              Sign in with Google so Claude can operate your PaySats Stacks
-              agent — Bitflow USDCx→sBTC DCA, Zest borrow, and withdraw to
-              Leather. One-time approval; after this Claude can help without
-              opening the browser again.
-            </>
-          ) : (
-            <>
-              Sign in with Google and approve agent access so Claude can act on
-              your behalf. It&apos;s a one-time approval — after this Claude can
-              help you directly without opening the browser again.
-            </>
-          )}
+          Sign in with Google and approve agent access so Claude can act on
+          your behalf. It&apos;s a one-time approval — after this Claude can
+          help you directly without opening the browser again.
         </p>
         <ul
           style={{
@@ -161,20 +149,9 @@ export function VerificationClient({
             paddingLeft: 18,
           }}
         >
-          {stacks ? (
-            <>
-              <li>Fund the Stacks agent with USDCx, sBTC, and a little STX</li>
-              <li>Set up and manage recurring Bitflow DCA (USDCx → sBTC)</li>
-              <li>Borrow USDCx on Zest by collateralizing sBTC</li>
-              <li>Withdraw USDCx, sBTC, or STX to Leather / Xverse</li>
-            </>
-          ) : (
-            <>
-              <li>Deposit IDR and mint IDRX to your wallet</li>
-              <li>Set up and manage recurring DCA into Bitcoin (cbBTC)</li>
-              <li>Borrow IDRX by collateralizing your BTC</li>
-            </>
-          )}
+          <li>Deposit IDR and mint IDRX to your wallet</li>
+          <li>Set up and manage recurring DCA into Bitcoin (cbBTC)</li>
+          <li>Borrow IDRX by collateralizing your BTC</li>
         </ul>
 
         {userCode ? (

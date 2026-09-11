@@ -10,27 +10,30 @@ export function mcpText(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
 }
 
-function privyUserIdFrom(authInfo: AuthInfo | undefined): string | null {
-  const id = authInfo?.extra?.privyUserId;
+function userIdFrom(authInfo: AuthInfo | undefined): string | null {
+  const extra = authInfo?.extra;
+  const id = extra?.userId ?? extra?.privyUserId;
   return typeof id === "string" ? id : null;
 }
 
 export async function resolveMcpUser(
   authInfo: AuthInfo | undefined,
 ): Promise<User> {
-  const privyUserId = privyUserIdFrom(authInfo);
+  const privyUserId = userIdFrom(authInfo);
   if (!privyUserId) throw new Error("Tidak terautentikasi");
   const user = await getPrivyUserById(privyUserId);
   if (!user) throw new Error("User tidak ditemukan");
   return user;
 }
 
+/** Stacks MCP identity is the PaySats DB row (Leather-linked). No Privy. */
 export async function resolveMcpPaysatsUser(
   authInfo: AuthInfo | undefined,
-): Promise<{ privy: User; row: DbUser }> {
-  const privy = await resolveMcpUser(authInfo);
-  const row = await upsertDbUser(privy.id);
-  return { privy, row };
+): Promise<{ userId: string; row: DbUser }> {
+  const userId = userIdFrom(authInfo);
+  if (!userId) throw new Error("Tidak terautentikasi");
+  const row = await upsertDbUser(userId);
+  return { userId, row };
 }
 
 export function withPaysatsMcpAuth(
@@ -47,7 +50,7 @@ export function withPaysatsMcpAuth(
         clientId: row.clientId,
         scopes: row.scope ? row.scope.split(" ") : [],
         expiresAt: Math.floor(row.expiresAt.getTime() / 1000),
-        extra: { privyUserId: row.privyUserId },
+        extra: { userId: row.privyUserId, privyUserId: row.privyUserId },
       };
       return info;
     },

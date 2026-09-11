@@ -11,7 +11,8 @@ import type { ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-  if (!appId) {
+  const stacksMcpOnly = process.env.NEXT_PUBLIC_MCP_PRODUCT === "stacks";
+  if (stacksMcpOnly || !appId) {
     return (
       <I18nProvider>
         <CurrencyProvider>

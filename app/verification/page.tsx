@@ -1,3 +1,4 @@
+import { StacksVerificationClient } from "@/features/verification/stacks-verification-client";
 import { VerificationClient } from "@/features/verification/verification-client";
 import { isStacksVerification } from "@/services/mcp/host";
 import { headers } from "next/headers";
@@ -48,12 +49,18 @@ export default async function VerificationPage({
   const stacks = isStacksVerification(flavor ?? null, complete ?? null, host);
   return (
     <Suspense fallback={null}>
-      <VerificationClient
-        userCode={user_code ?? null}
-        handle={handle ?? null}
-        complete={complete ?? null}
-        stacks={stacks}
-      />
+      {stacks ? (
+        <StacksVerificationClient
+          handle={handle ?? null}
+          complete={complete ?? null}
+        />
+      ) : (
+        <VerificationClient
+          userCode={user_code ?? null}
+          handle={handle ?? null}
+          complete={complete ?? null}
+        />
+      )}
     </Suspense>
   );
 }

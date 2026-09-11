@@ -200,8 +200,8 @@ Claude (or any MCP client) operates a **per-user Stacks agent account**,
 not the user's Leather wallet. The user funds that address; PaySats signs
 DCA, Zest borrow, and withdraw server-side.
 
-Remote MCP URL: `https://stxmcp.paysats.exchange/mcp` (OAuth with the
-PaySats Google account). Base/Privy tools stay on
+Remote MCP URL: `https://stxmcp.paysats.exchange/mcp` (OAuth with Leather /
+Xverse — not Privy). Base/Privy tools stay on
 `https://privymcp.paysats.exchange/mcp`. Tools: `get_account` (Stacks
 agent), `setup_sbtc_dca`, `cancel_sbtc_dca`, `get_sbtc_dca_status`,
 `get_sbtc_dca_history`, `borrow`, `get_borrow_status`, `withdraw`.

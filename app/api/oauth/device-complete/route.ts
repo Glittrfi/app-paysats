@@ -1,6 +1,7 @@
+import { getPendingAuth, issueAuthCode } from "@/services/oauth/store";
+import { isStacksMcpRequest } from "@/services/mcp/host";
 import { prisma } from "@/lib/prisma";
 import { ensureIdrxOnboarding } from "@/services/idrx/onboarding-service";
-import { getPendingAuth, issueAuthCode } from "@/services/oauth/store";
 import { awaitDeviceToken } from "@/services/privy/device-auth";
 import { saveDeviceSession } from "@/services/privy/device-session";
 import {
@@ -8,14 +9,16 @@ import {
   getPreferredEthereumAddress,
   getPrivyServerClient,
 } from "@/services/privy/server";
+import {
+  userFromLinkedStacksAddress,
+  verifyStacksMcpSignature,
+} from "@/services/stacks/mcp-oauth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /**
- * Callback hit by the Verification page after the user approves agent access.
- * Polls Privy's token endpoint with the pending device code, stores the
- * per-user device access/refresh tokens, ensures IDRX onboarding, then mints an
- * OAuth 2.1 authorization code and redirects back to the MCP client (Claude).
+ * Callback after the user approves agent access in the browser.
+ * Stacks: Leather signature (no Privy). Base: Privy device-grant poll.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -27,7 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   const pending = await getPendingAuth(handle);
-  if (!pending || !pending.deviceCode) {
+  if (!pending) {
     return NextResponse.json({ error: "expired_or_invalid_handle" }, { status: 400 });
   }
 
@@ -35,7 +38,72 @@ export async function GET(req: NextRequest) {
     return clientRedirect(pending.redirectUri, pending.clientState, { error: "access_denied" });
   }
 
-  // Poll Privy for the token now that the user has approved in the browser.
+  const stacks =
+    isStacksMcpRequest(req) ||
+    Boolean(searchParams.get("signature") && searchParams.get("publicKey"));
+
+  if (stacks) {
+    return completeStacks(req, pending);
+  }
+
+  return completePrivy(pending);
+}
+
+async function completeStacks(
+  req: NextRequest,
+  pending: NonNullable<Awaited<ReturnType<typeof getPendingAuth>>>,
+) {
+  const { searchParams } = new URL(req.url);
+  const address = searchParams.get("address");
+  const signature = searchParams.get("signature");
+  const publicKey = searchParams.get("publicKey");
+  if (!address || !signature || !publicKey) {
+    return clientRedirect(pending.redirectUri, pending.clientState, {
+      error: "invalid_request",
+    });
+  }
+
+  let recovered: string;
+  try {
+    recovered = verifyStacksMcpSignature({
+      handle: pending.handle,
+      address,
+      signature,
+      publicKey,
+    });
+  } catch (e) {
+    console.error("[device-complete] stacks signature failed:", e);
+    return clientRedirect(pending.redirectUri, pending.clientState, {
+      error: "access_denied",
+    });
+  }
+
+  try {
+    const user = await userFromLinkedStacksAddress(recovered);
+    const { code } = await issueAuthCode({
+      clientId: pending.clientId,
+      redirectUri: pending.redirectUri,
+      codeChallenge: pending.codeChallenge,
+      codeChallengeMethod: pending.codeChallengeMethod,
+      scope: pending.scope,
+      privyUserId: user.privyUserId,
+    });
+    return clientRedirect(pending.redirectUri, pending.clientState, { code });
+  } catch (e) {
+    console.error("[device-complete] stacks persist failed:", e);
+    return clientRedirect(pending.redirectUri, pending.clientState, {
+      error: "server_error",
+    });
+  }
+}
+
+async function completePrivy(
+  pending: NonNullable<Awaited<ReturnType<typeof getPendingAuth>>>,
+) {
+  if (!pending.deviceCode) {
+    return NextResponse.json({ error: "expired_or_invalid_handle" }, { status: 400 });
+  }
+
   const result = await awaitDeviceToken(pending.deviceCode, { intervalSec: 2, timeoutMs: 30_000 });
   if (result.status !== "ok") {
     console.error("[device-complete] token poll not ok:", result.status, "error" in result ? result.error : "");
@@ -48,9 +116,6 @@ export async function GET(req: NextRequest) {
     return clientRedirect(pending.redirectUri, pending.clientState, { error });
   }
 
-  // Resolve the user behind the device-grant access token. It may be a standard
-  // Privy auth JWT (verifiable) or an OAuth access token — fall back to reading
-  // the `sub` claim, since we obtained the token directly from Privy.
   const privy = getPrivyServerClient();
   let privyUser;
   try {
@@ -68,7 +133,6 @@ export async function GET(req: NextRequest) {
   const walletId = getEmbeddedWalletId(privyUser) ?? null;
 
   try {
-    // Make sure a User row exists before we attach the device session.
     await prisma.user.upsert({
       where: { privyUserId: privyUser.id },
       create: {
@@ -85,8 +149,6 @@ export async function GET(req: NextRequest) {
       walletAddress,
     });
 
-    // IDRX onboarding (auto placeholder, no KYC) so deposits work right away.
-    // Best-effort: never block the connection on onboarding.
     await ensureIdrxOnboarding(privyUser).catch((e) =>
       console.error("[device-complete] idrx onboarding (non-fatal):", e),
     );
@@ -109,12 +171,6 @@ export async function GET(req: NextRequest) {
   return clientRedirect(pending.redirectUri, pending.clientState, { code });
 }
 
-/**
- * Resolve the Privy user DID from a device-grant access token. Tries strict
- * verification first; if that fails (the device-grant token is an OAuth access
- * token, not the identity JWT verifyAuthToken expects), decode the `sub` claim.
- * Safe because we obtained the token directly from Privy's token endpoint.
- */
 async function resolvePrivyUserId(accessToken: string): Promise<string | null> {
   try {
     const claims = await getPrivyServerClient().verifyAuthToken(accessToken);

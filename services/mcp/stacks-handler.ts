@@ -62,9 +62,9 @@ function registerStacksTools(server: McpServer) {
     },
     async ({ amountUsdcx, numberOfOrders, frequency }, extra) => {
       try {
-        const { privy } = await resolveMcpPaysatsUser(extra.authInfo);
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
         const res = await setupSbtcDca({
-          privyUserId: privy.id,
+          privyUserId: userId,
           amountUsdcx,
           numberOfOrders,
           frequency,
@@ -91,9 +91,9 @@ function registerStacksTools(server: McpServer) {
     },
     async ({ orderId }, extra) => {
       try {
-        const { privy } = await resolveMcpPaysatsUser(extra.authInfo);
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
         const res = await cancelSbtcDca({
-          privyUserId: privy.id,
+          privyUserId: userId,
           orderId,
         });
         return text(JSON.stringify(res, null, 2));
@@ -160,9 +160,9 @@ function registerStacksTools(server: McpServer) {
     },
     async ({ collateralSats, borrowUsdcx }, extra) => {
       try {
-        const { privy } = await resolveMcpPaysatsUser(extra.authInfo);
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
         const res = await borrowUsdcxAgainstSbtc({
-          privyUserId: privy.id,
+          privyUserId: userId,
           collateralSats,
           borrowUsdcx,
         });
@@ -224,9 +224,9 @@ function registerStacksTools(server: McpServer) {
     },
     async ({ token, amount, recipient }, extra) => {
       try {
-        const { privy } = await resolveMcpPaysatsUser(extra.authInfo);
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
         const res = await withdrawFromAgent({
-          privyUserId: privy.id,
+          privyUserId: userId,
           token,
           amount,
           recipient,

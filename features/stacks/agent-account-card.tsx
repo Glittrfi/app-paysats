@@ -302,7 +302,8 @@ export function AgentAccountCard() {
               className="text-[11px]"
               style={{ color: "var(--paysats-text-muted)" }}
             >
-              Stacks agent tools. Keep{" "}
+              Connect Claude to this URL, then approve with Leather / Xverse
+              (not Google). Keep{" "}
               <code>privymcp.paysats.exchange</code> for Base / Privy.
             </p>
             <pre
