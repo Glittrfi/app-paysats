@@ -38,7 +38,7 @@ export function mcpPublicUrl(): string {
 
 export function appPublicUrl(): string {
   return (
-    process.env.VERIFICATION_BASE_URL ?? "https://app.paysats.exchange"
+    process.env.STACKS_APP_PUBLIC_URL ?? "https://stx.paysats.exchange"
   ).replace(/\/+$/, "");
 }
 

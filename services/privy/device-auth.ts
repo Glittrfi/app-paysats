@@ -4,8 +4,9 @@
  * Implements the "Authorized wallet access for self-hosted agents" flow where
  * our MCP server (privymcp.paysats.exchange) is the *agent/device*:
  *   1. request a device + user code,
- *   2. the user approves in a browser at the dashboard-configured Verification
- *      URI (app.paysats.exchange/verification) which calls device_verify,
+ *   2. the user approves in a browser at the hosted Verification URI
+ *      (app.paysats.exchange for Base, stx.paysats.exchange for Stacks)
+ *      which calls device_verify,
  *   3. we poll the token endpoint for the per-user access + refresh tokens.
  *
  * The resulting access_token is a standard Privy user access token; we feed it

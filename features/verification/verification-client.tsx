@@ -2,27 +2,26 @@
 
 import { usePostLoginSync } from "@/hooks/use-post-login-sync";
 import { useLoginWithOAuth, usePrivy } from "@privy-io/react-auth";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const PRIVY_AUTH_BASE = "https://auth.privy.io";
 
 type Phase = "init" | "login" | "ready" | "working" | "done" | "denied" | "error";
 
 /**
- * Hosted browser approval page for Privy's device-authorization grant. The MCP
- * server (privymcp.paysats.exchange) started a device authorization and sent the
- * user here with a `user_code` + a `handle` + a `complete` callback URL. The
- * user logs in with Privy and approves; we call Privy's device_verify, then
- * return to the MCP server's callback which finalizes the OAuth flow.
+ * Hosted browser approval page for Privy's device-authorization grant.
+ * Base MCP → app.paysats.exchange; Stacks MCP → stx.paysats.exchange.
  */
 export function VerificationClient({
   userCode,
   handle,
   complete,
+  stacks,
 }: {
   userCode: string | null;
   handle: string | null;
   complete: string | null;
+  stacks: boolean;
 }) {
   const { ready, authenticated, getAccessToken } = usePrivy();
   const { initOAuth } = useLoginWithOAuth();
@@ -88,10 +87,9 @@ export function VerificationClient({
   const onApprove = useCallback(async () => {
     if (!valid) return;
     setPhase("working");
-    setMessage("Preparing your wallet…");
+    setMessage(stacks ? "Connecting your Stacks account…" : "Preparing your wallet…");
     try {
-      // Ensure embedded wallet + IDRX onboarding exist before approval.
-      await sync().catch(() => undefined);
+      await sync({ skipIdrx: stacks }).catch(() => undefined);
       setMessage("Granting agent access…");
       await deviceVerify("approve");
       setPhase("done");
@@ -100,7 +98,7 @@ export function VerificationClient({
       setPhase("error");
       setMessage(e instanceof Error ? e.message : "Something went wrong.");
     }
-  }, [valid, sync, deviceVerify, returnToMcp]);
+  }, [valid, stacks, sync, deviceVerify, returnToMcp]);
 
   const onDeny = useCallback(async () => {
     if (!valid) return;
@@ -136,12 +134,23 @@ export function VerificationClient({
         }}
       >
         <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
-          Verify agent access
+          {stacks ? "Verify Stacks agent access" : "Verify agent access"}
         </h1>
         <p style={{ fontSize: 14, lineHeight: 1.5, color: "#6b5c4d", marginBottom: 12 }}>
-          Sign in with Google and approve agent access so Claude can act on your
-          behalf. It&apos;s a one-time approval — after this Claude can help you
-          directly without opening the browser again.
+          {stacks ? (
+            <>
+              Sign in with Google so Claude can operate your PaySats Stacks
+              agent — Bitflow USDCx→sBTC DCA, Zest borrow, and withdraw to
+              Leather. One-time approval; after this Claude can help without
+              opening the browser again.
+            </>
+          ) : (
+            <>
+              Sign in with Google and approve agent access so Claude can act on
+              your behalf. It&apos;s a one-time approval — after this Claude can
+              help you directly without opening the browser again.
+            </>
+          )}
         </p>
         <ul
           style={{
@@ -152,9 +161,20 @@ export function VerificationClient({
             paddingLeft: 18,
           }}
         >
-          <li>Deposit IDR and mint IDRX to your wallet</li>
-          <li>Set up and manage recurring DCA into Bitcoin (cbBTC)</li>
-          <li>Borrow IDRX by collateralizing your BTC</li>
+          {stacks ? (
+            <>
+              <li>Fund the Stacks agent with USDCx, sBTC, and a little STX</li>
+              <li>Set up and manage recurring Bitflow DCA (USDCx → sBTC)</li>
+              <li>Borrow USDCx on Zest by collateralizing sBTC</li>
+              <li>Withdraw USDCx, sBTC, or STX to Leather / Xverse</li>
+            </>
+          ) : (
+            <>
+              <li>Deposit IDR and mint IDRX to your wallet</li>
+              <li>Set up and manage recurring DCA into Bitcoin (cbBTC)</li>
+              <li>Borrow IDRX by collateralizing your BTC</li>
+            </>
+          )}
         </ul>
 
         {userCode ? (

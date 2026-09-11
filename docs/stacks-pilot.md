@@ -324,6 +324,12 @@ agent address. Evidence: `StacksAgentAction` rows.
 4. Connect Claude to `https://stxmcp.paysats.exchange/mcp` (OAuth with the
    same Google account). Copy the snippet from the agent card. Leave
    `privymcp.paysats.exchange` for Base / Privy tools.
+   Stacks approval opens **https://stx.paysats.exchange/verification** (not
+   `app.paysats.exchange`). Production: `git pull && npm run build && pm2
+   restart paysats-v2-mcp` on the MCP host, and deploy the app to Vercel so
+   `stx.paysats.exchange` has the Stacks copy.
+   Smoke test: `curl -sI https://stxmcp.paysats.exchange/mcp` should be **401**
+   JSON (`invalid_token`), not an HTML 404.
 5. `get_account` — confirm `stacks.agentAddress` and balances.
 6. `setup_sbtc_dca` with a small amount (e.g. $0.05 × 2 @ `1min`).
 7. `get_sbtc_dca_status` until active; first payout should hit the agent.
@@ -338,8 +344,9 @@ services/stacks/signer.ts           per-address nonce lock + SIP-010 / STX
 services/stacks/agent-wallet.ts     generate / import / encrypt key
 services/stacks/agent-actions.ts   setup_dca / cancel / borrow / withdraw
 services/mcp/stacks-account.ts     get_account stacks payload
-app/api/mcp/[transport]/route.ts    Base / Privy tools
+app/mcp/route.ts                   public /mcp (Host picks Stacks vs Base)
 app/api/stxmcp/[transport]/route.ts  Stacks agent tools
+app/api/mcp/[transport]/route.ts     Base / Privy tools
 app/api/stacks/agent/wallet|withdraw
 features/stacks/agent-account-card.tsx
 prisma: User.stacksAgent* + StacksAgentAction

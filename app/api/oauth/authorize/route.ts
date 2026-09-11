@@ -1,4 +1,9 @@
 import { createPendingAuth, getClient } from "@/services/oauth/store";
+import {
+  baseAppPublicUrl,
+  isStacksMcpRequest,
+  stacksAppPublicUrl,
+} from "@/services/mcp/host";
 import { requestDeviceCode } from "@/services/privy/device-auth";
 import { getPublicOrigin } from "mcp-handler";
 import { NextResponse } from "next/server";
@@ -9,8 +14,8 @@ import type { NextRequest } from "next/server";
  * grant). Validates the client + PKCE params, starts a Privy device
  * authorization, persists the device/user codes against a pending-auth handle,
  * then redirects the user's browser to the hosted Verification page
- * (app.paysats.exchange/verification) where they log in and approve agent
- * access. After approval the page returns to /api/oauth/device-complete.
+ * (app.paysats.exchange for Base, stx.paysats.exchange for Stacks). After
+ * approval the page returns to /api/oauth/device-complete.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -64,27 +69,42 @@ export async function GET(req: NextRequest) {
     userCode: device.userCode,
   });
 
-  // Prefer Privy's verification_uri_complete (it already carries user_code and
-  // points at the dashboard-configured Verification URI). Fall back to env.
-  const verifyUrl = buildVerificationUrl(device.verificationUriComplete, device.userCode);
-  // Tell the verification page our handle + where to return after approval.
+  // Privy's dashboard Verification URI is a single URL (app.paysats.exchange).
+  // For the Stacks MCP, rewrite that origin to stx.paysats.exchange so the
+  // approval page is the Stacks app, not the Base/IDRX app.
+  const stacks = isStacksMcpRequest(req);
+  const verifyUrl = buildVerificationUrl(
+    device.verificationUriComplete,
+    device.userCode,
+    stacks,
+  );
   verifyUrl.searchParams.set("handle", handle);
   verifyUrl.searchParams.set("complete", `${origin}/api/oauth/device-complete`);
+  verifyUrl.searchParams.set("flavor", stacks ? "stacks" : "base");
 
   return NextResponse.redirect(verifyUrl);
 }
 
-function buildVerificationUrl(complete: string, userCode: string): URL {
+function buildVerificationUrl(
+  complete: string,
+  userCode: string,
+  stacks: boolean,
+): URL {
+  const base = stacks ? stacksAppPublicUrl() : baseAppPublicUrl();
+  let fromPrivy: URL | null = null;
   if (complete) {
     try {
-      return new URL(complete);
+      fromPrivy = new URL(complete);
     } catch {
-      // fall through to env-based URL
+      fromPrivy = null;
     }
   }
-  const base = process.env.VERIFICATION_BASE_URL || "https://app.paysats.exchange";
-  const url = new URL("/verification", base);
-  url.searchParams.set("user_code", userCode);
+  const url = fromPrivy
+    ? new URL(fromPrivy.pathname + fromPrivy.search, base)
+    : new URL("/verification", base);
+  if (!url.searchParams.get("user_code")) {
+    url.searchParams.set("user_code", userCode);
+  }
   return url;
 }
 

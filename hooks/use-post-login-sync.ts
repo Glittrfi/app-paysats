@@ -33,7 +33,7 @@ export function usePostLoginSync() {
 
   const lastSyncKey = useRef<string | null>(null);
 
-  return useCallback(async () => {
+  return useCallback(async (opts?: { skipIdrx?: boolean }) => {
     if (!authenticatedRef.current) return;
 
     const currentUser = userRef.current;
@@ -66,6 +66,8 @@ export function usePostLoginSync() {
       if (!res.ok) return;
       lastSyncKey.current = key;
     }
+
+    if (opts?.skipIdrx) return;
 
     const statusRes = await fetchWithPrivy(tokenFn, "/api/idrx/onboarding");
     const statusJson = (await statusRes.json().catch(() => ({}))) as {
