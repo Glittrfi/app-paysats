@@ -11,6 +11,20 @@ const nextConfig: NextConfig = {
       { source: "/dca/:path*", destination: "/save/:path*", permanent: false },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/mcp",
+        has: [{ type: "host", value: "stxmcp.paysats.exchange" }],
+        destination: "/api/stxmcp/mcp",
+      },
+      {
+        source: "/mcp",
+        has: [{ type: "host", value: "privymcp.paysats.exchange" }],
+        destination: "/api/mcp/mcp",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

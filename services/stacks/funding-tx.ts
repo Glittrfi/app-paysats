@@ -129,6 +129,37 @@ async function fetchHiroTxPage(
   return (await res.json()) as HiroTx;
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Poll Hiro until a tx succeeds, fails, or times out. */
+export async function waitForTxSuccess(
+  txId: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<HiroTx & { tx_status?: string }> {
+  const timeoutMs = opts?.timeoutMs ?? 180_000;
+  const intervalMs = opts?.intervalMs ?? 4_000;
+  const deadline = Date.now() + timeoutMs;
+  let last: HiroTx & { tx_status?: string } = { tx_status: "pending" };
+  while (Date.now() < deadline) {
+    last = await fetchHiroTx(txId);
+    if (last.tx_status === "success") return last;
+    if (
+      last.tx_status &&
+      last.tx_status !== "pending" &&
+      last.tx_status !== "not_found"
+    ) {
+      throw new ServiceError(400, `Transaction failed (${last.tx_status})`);
+    }
+    await sleep(intervalMs);
+  }
+  throw new ServiceError(
+    408,
+    `Transaction ${txId} did not confirm within ${Math.round(timeoutMs / 1000)}s`,
+  );
+}
+
 /** Hiro returns the first 20 events by default; multi-hop swaps have more. */
 export async function fetchHiroTx(txId: string): Promise<HiroTx & { tx_status?: string }> {
   const id = normalizeTxId(txId);

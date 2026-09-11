@@ -286,12 +286,72 @@ borrow or repay starts failing; it moved v0-4 → v0-7 → v0-8 (2026-08-31).
 4. Approve lock, then borrow. Both txs on Hiro Explorer; USDCx lands in the wallet.
 5. Repay (partial or all), then withdraw sBTC. Position returns to empty.
 
+## Milestone 3 — MCP agent account (sBTC DCA + Zest)
+
+Stacks has no Privy device-auth equivalent, so Claude cannot sign Leather.
+Each user gets a **Stacks agent account** PaySats can sign for. The user
+funds it; the agent DCA / borrows / withdraws from that balance.
+
+- **Generated (default):** new keypair, secret encrypted with `ENCRYPTION_KEY`.
+  A small STX top-up is sent from the PaySats keeper so the first fee is paid.
+- **Imported:** paste a hex private key (self-custody MCP). PaySats can sign
+  as that wallet until the key is removed. `.btc` BNS names are displayed
+  when Hiro reverse-lookup finds one.
+
+DCA payouts land on the **agent address** (so the same sBTC can be borrowed
+on Zest). Withdraw sends USDCx / sBTC / STX to the linked Leather wallet.
+
+### MCP tools (in addition to the existing Base tools)
+
+| Tool | Action |
+| --- | --- |
+| `get_account` | Base + `stacks` agent object |
+| `setup_sbtc_dca` | prepaid USDCx → sBTC from the agent |
+| `cancel_sbtc_dca` | refund leftover USDCx to the agent |
+| `get_sbtc_dca_status` / `get_sbtc_dca_history` | orders + executions |
+| `borrow` | Zest lock + borrow from the agent |
+| `get_borrow_status` | live position |
+| `withdraw` | agent → Leather (or explicit recipient) |
+
+If the agent balance is too low, writes return `needsDeposit` with the
+agent address. Evidence: `StacksAgentAction` rows.
+
+### Claude demo checklist
+
+1. `npx prisma migrate deploy`
+2. Sign in → `/stacks` → **Create agent account**. Copy the address.
+3. Send a little USDCx + sBTC + STX to that address (or let the STX top-up land).
+4. Connect Claude to `https://stxmcp.paysats.exchange/mcp` (OAuth with the
+   same Google account). Copy the snippet from the agent card. Leave
+   `privymcp.paysats.exchange` for Base / Privy tools.
+5. `get_account` — confirm `stacks.agentAddress` and balances.
+6. `setup_sbtc_dca` with a small amount (e.g. $0.05 × 2 @ `1min`).
+7. `get_sbtc_dca_status` until active; first payout should hit the agent.
+8. `borrow` a tiny USDCx amount against agent sBTC. Wallet prompt is **not**
+   required — the agent signs.
+9. `withdraw` USDCx back to the linked Leather address.
+
+### Architecture (M3)
+
+```
+services/stacks/signer.ts           per-address nonce lock + SIP-010 / STX
+services/stacks/agent-wallet.ts     generate / import / encrypt key
+services/stacks/agent-actions.ts   setup_dca / cancel / borrow / withdraw
+services/mcp/stacks-account.ts     get_account stacks payload
+app/api/mcp/[transport]/route.ts    Base / Privy tools
+app/api/stxmcp/[transport]/route.ts  Stacks agent tools
+app/api/stacks/agent/wallet|withdraw
+features/stacks/agent-account-card.tsx
+prisma: User.stacksAgent* + StacksAgentAction
+```
+
 ## Known limitations
 
 - Bitflow routing is mainnet-only.
 - Prepaid USDCx is custodial on the PaySats keeper until swapped or
   refunded.
-- The Stacks wallet is external (Leather/Xverse), not Privy embedded.
+- Generated agent accounts are custodial (PaySats holds the encrypted
+  key). Imported keys are the self-custody MCP path; treat them as
+  delegated signing.
 - Isolated Zest collateral is not yield-bearing (no zsBTC). Yield mode can
   come later.
-- Agent-initiated Stacks flows land in Milestone 3.

@@ -50,6 +50,15 @@ model User {
   /// When the Stacks wallet was linked.
   stacksLinkedAt        DateTime?
 
+  /// Milestone 3: PaySats-signed Stacks agent account (generated or imported).
+  stacksAgentAddress     String?   @unique
+  /// Encrypted hex private key (aes-256-gcm via lib/crypto.ts). Never returned.
+  stacksAgentKeyEnc      String?
+  /// 'generated' (custodial) | 'imported' (user's own key).
+  stacksAgentKeySource   String?
+  /// When the agent account was created or imported.
+  stacksAgentCreatedAt   DateTime?
+
   mintSnapshots       MintRequestSnapshot[]
   creditLoans         CreditLoan[]
   payoutDestinations  PayoutDestination[]
@@ -58,6 +67,7 @@ model User {
   stacksSwaps         StacksSwap[]
   stacksDcaOrders     StacksDcaOrder[]
   stacksZestTxs       StacksZestTx[]
+  stacksAgentActions  StacksAgentAction[]
 }
 
 /// Dynamically-registered MCP/OAuth client (RFC 7591). Claude registers itself
@@ -328,6 +338,28 @@ model StacksZestTx {
 
   @@index([userId])
   @@index([stacksAddress])
+}
+
+/// Milestone 3: MCP-initiated Stacks write (setup_dca, borrow, cancel, withdraw).
+/// Evidence trail for agent-initiated, user-funded on-chain actions.
+model StacksAgentAction {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// setup_sbtc_dca | cancel_sbtc_dca | borrow | withdraw
+  tool       String
+  txId       String?
+  network    String
+  /// pending | success | failed
+  status     String    @default("pending")
+  paramsJson String?
+  resultJson String?
+  error      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([txId])
 }
 
 /// Optional local snapshot after mint / for quicker empty states; list view still uses IDRX history API.

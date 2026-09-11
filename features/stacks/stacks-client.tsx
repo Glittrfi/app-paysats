@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { GradButton } from "@/components/ui/grad-button";
 import { InlinePanel } from "@/components/ui/inline-panel";
 import { PillSeg } from "@/components/ui/pill-seg";
+import { AgentAccountCard } from "@/features/stacks/agent-account-card";
 import { StacksFundGuide } from "@/features/stacks/stacks-fund-guide";
 import { ZestBorrowCard } from "@/features/stacks/zest-borrow-card";
 import { useStacksBalances } from "@/hooks/use-stacks-balances";
@@ -1493,6 +1494,7 @@ export function StacksClient() {
     <div className="px-5 pb-14">
       <BackHeader title="Native BTC rail" badge={wallet.network} />
       <div className="mt-5 space-y-4">
+        <AgentAccountCard />
         <WalletCard wallet={wallet} />
 
         {wallet.connected ? (
@@ -1542,10 +1544,9 @@ export function StacksClient() {
         ) : null}
 
         <p className="text-[10px]" style={{ color: "var(--paysats-text-faint)" }}>
-          Native BTC rail funded by the Stacks Endowment. sBTC is Bitcoin-settled
-          and 1:1 backed; USDCx is a Circle USDC-backed dollar via xReserve.
-          One-shot swaps and recurring DCA route through Bitflow. Borrow USDCx
-          against isolated sBTC on Zest.
+          Native BTC rail funded by the Stacks Endowment. The agent account is
+          the Stacks address Claude can sign for; Leather stays self-custodial
+          for one-shot swaps and as the withdraw destination.
         </p>
       </div>
     </div>

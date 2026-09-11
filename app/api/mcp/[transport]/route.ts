@@ -6,30 +6,13 @@ import { cancelDca, setupDca } from "@/services/dca/signing-service";
 import { createIdrMintRequest, MINT_MIN_IDR } from "@/services/idrx/mint-service";
 import { getMintStatus } from "@/services/idrx/transactions-service";
 import { getIdrxOnboardingStatus } from "@/services/idrx/onboarding-service";
-import { verifyAccessToken } from "@/services/oauth/store";
-import { getPrivyUserById } from "@/services/privy/server";
-import type { User } from "@privy-io/server-auth";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import {
+  mcpText as text,
+  resolveMcpUser as resolveUser,
+  withPaysatsMcpAuth,
+} from "@/services/mcp/auth";
+import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
-
-function text(s: string) {
-  return { content: [{ type: "text" as const, text: s }] };
-}
-
-function privyUserIdFrom(authInfo: AuthInfo | undefined): string | null {
-  const id = authInfo?.extra?.privyUserId;
-  return typeof id === "string" ? id : null;
-}
-
-/** Resolve the authenticated Privy user from the MCP request's auth info. */
-async function resolveUser(authInfo: AuthInfo | undefined): Promise<User> {
-  const privyUserId = privyUserIdFrom(authInfo);
-  if (!privyUserId) throw new Error("Tidak terautentikasi");
-  const user = await getPrivyUserById(privyUserId);
-  if (!user) throw new Error("User tidak ditemukan");
-  return user;
-}
 
 const handler = createMcpHandler(
   (server) => {
@@ -38,7 +21,7 @@ const handler = createMcpHandler(
       {
         title: "Get account",
         description:
-          "Get the user's wallet address, IDRX and cbBTC balances, IDRX onboarding status, and active DCA order.",
+          "Get the user's Base wallet address, IDRX and cbBTC balances, IDRX onboarding status, and active DCA order.",
         inputSchema: {},
       },
       async (_args, extra) => {
@@ -315,23 +298,6 @@ const handler = createMcpHandler(
   { basePath: "/api/mcp", disableSse: true, verboseLogs: false },
 );
 
-/** Resolve our opaque OAuth access token to MCP AuthInfo (carrying privyUserId). */
-const authHandler = withMcpAuth(
-  handler,
-  async (_req, bearerToken) => {
-    if (!bearerToken) return undefined;
-    const row = await verifyAccessToken(bearerToken);
-    if (!row) return undefined;
-    const info: AuthInfo = {
-      token: bearerToken,
-      clientId: row.clientId,
-      scopes: row.scope ? row.scope.split(" ") : [],
-      expiresAt: Math.floor(row.expiresAt.getTime() / 1000),
-      extra: { privyUserId: row.privyUserId },
-    };
-    return info;
-  },
-  { required: true },
-);
+const authHandler = withPaysatsMcpAuth(handler);
 
 export { authHandler as GET, authHandler as POST, authHandler as DELETE };

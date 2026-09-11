@@ -194,6 +194,21 @@ USDCx is Circle's token (`SP120…usdcx`), not legacy aeUSDC.
    on withdraw. `PostConditionMode.Deny`.
 5. UI caps borrow at 80% of on-chain LTV-borrow (~48% vs 60%).
 
+## Milestone 3 — MCP agent account
+
+Claude (or any MCP client) operates a **per-user Stacks agent account**,
+not the user's Leather wallet. The user funds that address; PaySats signs
+DCA, Zest borrow, and withdraw server-side.
+
+Remote MCP URL: `https://stxmcp.paysats.exchange/mcp` (OAuth with the
+PaySats Google account). Base/Privy tools stay on
+`https://privymcp.paysats.exchange/mcp`. Tools: `get_account` (Stacks
+agent), `setup_sbtc_dca`, `cancel_sbtc_dca`, `get_sbtc_dca_status`,
+`get_sbtc_dca_history`, `borrow`, `get_borrow_status`, `withdraw`.
+
+Writes that lack funds return `needsDeposit` plus the agent address instead
+of throwing. See `docs/stacks-pilot.md` for the demo checklist.
+
 ## What's next
 
 - **Milestone 3:** MCP agent tools so AI agents can operate the Stacks
