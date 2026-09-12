@@ -11,8 +11,10 @@ import {
 import {
   borrowUsdcxAgainstSbtc,
   cancelSbtcDca,
+  repayZestBorrow,
   setupSbtcDca,
   withdrawFromAgent,
+  withdrawZestCollateral,
 } from "@/services/stacks/agent-actions";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpHandler } from "mcp-handler";
@@ -148,14 +150,23 @@ function registerStacksTools(server: McpServer) {
     {
       title: "Borrow USDCx against sBTC",
       description:
-        "Lock isolated sBTC on Zest V2 from the Stacks agent account and borrow USDCx. Pass collateralSats=0 to borrow against already-locked collateral. If the agent sBTC/STX balance is too low, returns needsDeposit.",
+        "Open or increase a Zest V2 isolated sBTC → USDCx borrow from the Stacks agent. Pass collateralSats=0 (or omit) to borrow more against already-locked sBTC. Pass borrowUsdcx=0 to only lock more collateral. Check get_borrow_status.maxAdditionalBorrowUsdcx first. If the agent sBTC/STX balance is too low, returns needsDeposit.",
       inputSchema: {
         collateralSats: z
           .number()
           .int()
           .min(0)
-          .describe("sats to lock as isolated collateral (0 if already locked)."),
-        borrowUsdcx: z.number().positive().describe("USDCx to borrow."),
+          .optional()
+          .describe(
+            "sats to lock as isolated collateral. 0 or omit to borrow more against existing collateral.",
+          ),
+        borrowUsdcx: z
+          .number()
+          .min(0)
+          .optional()
+          .describe(
+            "USDCx to borrow (must stay under maxAdditionalBorrowUsdcx). 0 to only add collateral.",
+          ),
       },
     },
     async ({ collateralSats, borrowUsdcx }, extra) => {
@@ -163,12 +174,76 @@ function registerStacksTools(server: McpServer) {
         const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
         const res = await borrowUsdcxAgainstSbtc({
           privyUserId: userId,
-          collateralSats,
-          borrowUsdcx,
+          collateralSats: collateralSats ?? 0,
+          borrowUsdcx: borrowUsdcx ?? 0,
         });
         return text(JSON.stringify(res, null, 2));
       } catch (e) {
         return text(errorMessage(e, "Failed to borrow"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "repay",
+    {
+      title: "Repay Zest USDCx debt",
+      description:
+        "Repay USDCx debt on the Stacks agent's Zest position. The repaid USDCx is taken from the agent wallet (not Leather). Omit amountUsdcx or set full=true to repay all debt plus a small interest buffer. After debt is 0, call withdraw_collateral to unlock sBTC back to the agent. Returns needsDeposit if the agent USDCx balance is too low.",
+      inputSchema: {
+        amountUsdcx: z
+          .number()
+          .positive()
+          .optional()
+          .describe("USDCx to repay. Omit with full=true to close the debt."),
+        full: z
+          .boolean()
+          .optional()
+          .describe(
+            "Repay all outstanding debt plus a 0.5%+1¢ buffer. Default true when amountUsdcx is omitted.",
+          ),
+      },
+    },
+    async ({ amountUsdcx, full }, extra) => {
+      try {
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
+        const res = await repayZestBorrow({
+          privyUserId: userId,
+          amountUsdcx,
+          full,
+        });
+        return text(JSON.stringify(res, null, 2));
+      } catch (e) {
+        return text(errorMessage(e, "Failed to repay"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "withdraw_collateral",
+    {
+      title: "Unlock sBTC from Zest",
+      description:
+        "Withdraw isolated sBTC from Zest back to the Stacks agent wallet. Debt must be 0 (call repay first). Omit collateralSats to unlock the full locked amount. This does not send to Leather — use withdraw afterwards if the user wants sBTC in Leather/Xverse.",
+      inputSchema: {
+        collateralSats: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("sats to unlock. Omit to withdraw all locked sBTC."),
+      },
+    },
+    async ({ collateralSats }, extra) => {
+      try {
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
+        const res = await withdrawZestCollateral({
+          privyUserId: userId,
+          collateralSats,
+        });
+        return text(JSON.stringify(res, null, 2));
+      } catch (e) {
+        return text(errorMessage(e, "Failed to withdraw collateral"));
       }
     },
   );

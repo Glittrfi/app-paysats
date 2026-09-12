@@ -11,6 +11,8 @@ import {
 import {
   buildZestBorrowTx,
   buildZestCollateralAddTx,
+  buildZestCollateralRemoveTx,
+  buildZestRepayTx,
 } from "@/lib/stacks/zest-tx";
 import { ServiceError } from "@/services/errors";
 import { previewStacksDca } from "@/services/stacks/dca-preview";
@@ -30,12 +32,15 @@ import {
 import { getStacksBalances } from "@/services/stacks/balances";
 import {
   broadcastContractCalls,
+  type ContractCallSpec,
   transferSip010,
   transferStx,
 } from "@/services/stacks/signer";
 import { verifyUsdcxFundingTx } from "@/services/stacks/funding-tx";
 import {
+  getZestPosition,
   previewZestBorrow,
+  serializeZestPosition,
   serializeZestPreview,
 } from "@/services/stacks/zest";
 import type { User as DbUser } from "@prisma/client";
@@ -381,6 +386,214 @@ export async function borrowUsdcxAgainstSbtc(opts: {
     collateralTxId,
     borrowTxId,
     preview: serializeZestPreview(preview),
+  };
+}
+
+function zestCall(tx: {
+  contractAddress: string;
+  contractName: string;
+  functionName: string;
+  functionArgs: ContractCallSpec["functionArgs"];
+  postConditions: ContractCallSpec["postConditions"];
+}): ContractCallSpec {
+  return {
+    contractAddress: tx.contractAddress,
+    contractName: tx.contractName,
+    functionName: tx.functionName,
+    functionArgs: tx.functionArgs,
+    postConditions: tx.postConditions,
+  };
+}
+
+async function waitZestTx(txId: string) {
+  try {
+    await waitForTxSuccess(txId, { timeoutMs: 35_000 });
+  } catch (e) {
+    if (e instanceof ServiceError && e.status === 408) return;
+    throw e;
+  }
+}
+
+/** 0.5% + 1¢ so accrued interest does not leave leftover dust debt. */
+function zestRepayBuffer(debt: bigint): bigint {
+  return debt / BigInt(200) + BigInt(10_000);
+}
+
+export async function repayZestBorrow(opts: {
+  privyUserId: string;
+  amountUsdcx?: number;
+  full?: boolean;
+}): Promise<
+  | NeedsDeposit
+  | {
+      ok: true;
+      txId: string;
+      repaidUsdcx: number;
+      full: boolean;
+      position: ReturnType<typeof serializeZestPosition>;
+      instructions: string;
+    }
+> {
+  if (!zestEnabled()) {
+    throw new ServiceError(400, "Zest borrow is mainnet-only");
+  }
+  const user = await ensureAgent(opts.privyUserId);
+  const signer = agentSignerFromUser(user);
+  const pos = await getZestPosition(signer.address, "mainnet");
+  if (pos.debtUsdcxRaw <= BigInt(0)) {
+    throw new ServiceError(400, "No Zest USDCx debt to repay");
+  }
+
+  const full =
+    opts.full === true ||
+    (opts.full !== false &&
+      (opts.amountUsdcx == null || !Number.isFinite(opts.amountUsdcx)));
+  const repayRaw = full
+    ? pos.debtUsdcxRaw + zestRepayBuffer(pos.debtUsdcxRaw)
+    : usdcxRawFromHuman(opts.amountUsdcx ?? 0);
+  if (repayRaw <= BigInt(0)) {
+    throw new ServiceError(400, "amountUsdcx must be positive, or set full=true");
+  }
+
+  const balances = await getStacksBalances(signer.address, "mainnet");
+  if (BigInt(balances.usdcxRaw) < repayRaw) {
+    return depositPayload(
+      user,
+      "usdcx",
+      balances.usdcx,
+      Number(repayRaw) / 1e6,
+    );
+  }
+  if (balances.stx < 0.02) {
+    return depositPayload(user, "stx", balances.stx, 0.1);
+  }
+
+  const repay = buildZestRepayTx({
+    senderAddress: signer.address,
+    amountUsdcxRaw: repayRaw,
+  });
+  const [{ txId }] = await broadcastContractCalls(signer, [zestCall(repay)]);
+  await waitZestTx(txId);
+  await prisma.stacksZestTx.create({
+    data: {
+      userId: user.id,
+      stacksAddress: signer.address,
+      txId,
+      network: "mainnet",
+      kind: "repay",
+      amountRaw: repayRaw.toString(),
+    },
+  });
+  await recordAction({
+    userId: user.id,
+    tool: "repay",
+    txId,
+    status: "success",
+    params: opts,
+    result: { full, repaidUsdcx: Number(repayRaw) / 1e6 },
+  });
+
+  const after = await getZestPosition(signer.address, "mainnet").catch(
+    () => pos,
+  );
+  return {
+    ok: true,
+    txId,
+    repaidUsdcx: Number(repayRaw) / 1e6,
+    full,
+    position: serializeZestPosition(after),
+    instructions:
+      after.debtUsdcxRaw === BigInt(0)
+        ? "Debt is 0. Call withdraw_collateral to unlock sBTC back to the agent, then withdraw if you want it in Leather."
+        : "Call get_borrow_status to confirm remaining debt. Repeat repay or use full=true to close it.",
+  };
+}
+
+export async function withdrawZestCollateral(opts: {
+  privyUserId: string;
+  collateralSats?: number;
+}): Promise<
+  | NeedsDeposit
+  | {
+      ok: true;
+      txId: string;
+      collateralSats: string;
+      position: ReturnType<typeof serializeZestPosition>;
+      instructions: string;
+    }
+> {
+  if (!zestEnabled()) {
+    throw new ServiceError(400, "Zest borrow is mainnet-only");
+  }
+  const user = await ensureAgent(opts.privyUserId);
+  const signer = agentSignerFromUser(user);
+  const pos = await getZestPosition(signer.address, "mainnet");
+  if (pos.collateralSats <= BigInt(0)) {
+    throw new ServiceError(400, "No Zest sBTC collateral to withdraw");
+  }
+  if (pos.debtUsdcxRaw > BigInt(0)) {
+    throw new ServiceError(
+      400,
+      `Repay the ${Number(pos.debtUsdcxRaw) / 1e6} USDCx Zest debt before unlocking sBTC. Call repay with full=true.`,
+    );
+  }
+
+  const amount =
+    opts.collateralSats != null && Number.isFinite(opts.collateralSats)
+      ? BigInt(Math.max(0, Math.floor(opts.collateralSats)))
+      : pos.collateralSats;
+  if (amount <= BigInt(0)) {
+    throw new ServiceError(400, "collateralSats must be positive");
+  }
+  if (amount > pos.collateralSats) {
+    throw new ServiceError(
+      400,
+      `Only ${pos.collateralSats.toString()} sats are locked`,
+    );
+  }
+
+  const balances = await getStacksBalances(signer.address, "mainnet");
+  if (balances.stx < 0.02) {
+    return depositPayload(user, "stx", balances.stx, 0.1);
+  }
+
+  const feeds = await fetchPythPriceFeedHexes();
+  const remove = buildZestCollateralRemoveTx({
+    senderAddress: signer.address,
+    amountSats: amount,
+    priceFeedHexes: feeds,
+  });
+  const [{ txId }] = await broadcastContractCalls(signer, [zestCall(remove)]);
+  await waitZestTx(txId);
+  await prisma.stacksZestTx.create({
+    data: {
+      userId: user.id,
+      stacksAddress: signer.address,
+      txId,
+      network: "mainnet",
+      kind: "collateral_remove",
+      amountRaw: amount.toString(),
+    },
+  });
+  await recordAction({
+    userId: user.id,
+    tool: "withdraw_collateral",
+    txId,
+    status: "success",
+    params: opts,
+    result: { collateralSats: amount.toString() },
+  });
+
+  const after = await getZestPosition(signer.address, "mainnet").catch(
+    () => pos,
+  );
+  return {
+    ok: true,
+    txId,
+    collateralSats: amount.toString(),
+    position: serializeZestPosition(after),
+    instructions:
+      "sBTC is back on the agent. Use withdraw with token=sbtc to send it to Leather if needed.",
   };
 }
 

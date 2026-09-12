@@ -204,7 +204,8 @@ Remote MCP URL: `https://stxmcp.paysats.exchange/mcp` (OAuth with Leather /
 Xverse — not Privy). Base/Privy tools stay on
 `https://privymcp.paysats.exchange/mcp`. Tools: `get_account` (Stacks
 agent), `setup_sbtc_dca`, `cancel_sbtc_dca`, `get_sbtc_dca_status`,
-`get_sbtc_dca_history`, `borrow`, `get_borrow_status`, `withdraw`.
+`get_sbtc_dca_history`, `borrow`, `repay`, `withdraw_collateral`,
+`get_borrow_status`, `withdraw`.
 
 Writes that lack funds return `needsDeposit` plus the agent address instead
 of throwing. See `docs/stacks-pilot.md` for the demo checklist.
