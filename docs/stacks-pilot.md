@@ -310,6 +310,7 @@ on Zest). Withdraw sends USDCx / sBTC / STX to the linked Leather wallet.
 | `setup_sbtc_dca` | prepaid USDCx → sBTC from the agent |
 | `cancel_sbtc_dca` | refund leftover USDCx to the agent |
 | `get_sbtc_dca_status` / `get_sbtc_dca_history` | orders + executions |
+| `get_swap_quote` / `swap` | Bitflow sBTC ↔ USDCx from the agent |
 | `borrow` | Zest lock and/or borrow more from the agent |
 | `repay` | repay USDCx debt from the agent wallet |
 | `withdraw_collateral` | unlock sBTC from Zest back to the agent |
@@ -338,7 +339,8 @@ agent address. Evidence: `StacksAgentAction` rows.
 8. `borrow` a tiny USDCx amount against agent sBTC. Wallet prompt is **not**
    required — the agent signs. To borrow more later, call `borrow` with
    `collateralSats` omitted. `repay` (full=true) then `withdraw_collateral`
-   returns sBTC to the agent; `withdraw` sends it to Leather.
+   returns sBTC to the agent; `swap` (sBTC → USDCx) sells it back to USDCx;
+   `withdraw` sends USDCx or sBTC to Leather.
 9. `withdraw` USDCx back to the linked Leather address.
 
 ### Architecture (M3)

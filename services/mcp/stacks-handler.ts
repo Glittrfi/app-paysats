@@ -11,8 +11,10 @@ import {
 import {
   borrowUsdcxAgainstSbtc,
   cancelSbtcDca,
+  quoteAgentBitflowSwap,
   repayZestBorrow,
   setupSbtcDca,
+  swapOnAgent,
   withdrawFromAgent,
   withdrawZestCollateral,
 } from "@/services/stacks/agent-actions";
@@ -141,6 +143,110 @@ function registerStacksTools(server: McpServer) {
         return text(JSON.stringify(hist, null, 2));
       } catch (e) {
         return text(errorMessage(e, "Failed to load sBTC DCA history"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_swap_quote",
+    {
+      title: "Quote Bitflow swap",
+      description:
+        "Quote a Bitflow swap on the Stacks agent. Default is sBTC → USDCx (sell Bitcoin back to USDCx). Pass from=usdcx to=sbtc for the other direction. amountSats is sats when selling sBTC; amountUsdcx is human USDCx when selling USDCx. Omit the amount to quote the agent's full balance of `from`.",
+      inputSchema: {
+        from: z
+          .enum(["sbtc", "usdcx"])
+          .optional()
+          .describe("Token to sell. Default sbtc."),
+        to: z
+          .enum(["sbtc", "usdcx"])
+          .optional()
+          .describe("Token to buy. Default usdcx when from is sbtc."),
+        amountSats: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("sBTC to sell, in sats. Omit to use the full agent sBTC balance."),
+        amountUsdcx: z
+          .number()
+          .positive()
+          .optional()
+          .describe("USDCx to sell. Omit to use the full agent USDCx balance."),
+        slippage: z
+          .number()
+          .min(0.005)
+          .max(0.2)
+          .optional()
+          .describe("Slippage as a fraction, default 0.04 (4%)."),
+      },
+    },
+    async ({ from, to, amountSats, amountUsdcx, slippage }, extra) => {
+      try {
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
+        const res = await quoteAgentBitflowSwap({
+          privyUserId: userId,
+          from,
+          to,
+          amountSats,
+          amountUsdcx,
+          slippage,
+        });
+        return text(JSON.stringify(res, null, 2));
+      } catch (e) {
+        return text(errorMessage(e, "Failed to quote swap"));
+      }
+    },
+  );
+
+  server.registerTool(
+    "swap",
+    {
+      title: "Swap sBTC and USDCx",
+      description:
+        "Swap on Bitflow from the Stacks agent (no wallet prompt). Default sBTC → USDCx so Claude can sell Bitcoin back to USDCx after unlock. from=usdcx to=sbtc does a one-shot buy. Omit amount to swap the full `from` balance. Returns needsDeposit if the agent lacks sBTC/USDCx/STX.",
+      inputSchema: {
+        from: z
+          .enum(["sbtc", "usdcx"])
+          .optional()
+          .describe("Token to sell. Default sbtc."),
+        to: z
+          .enum(["sbtc", "usdcx"])
+          .optional()
+          .describe("Token to buy. Default usdcx when from is sbtc."),
+        amountSats: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("sBTC to sell, in sats. Omit to swap all agent sBTC."),
+        amountUsdcx: z
+          .number()
+          .positive()
+          .optional()
+          .describe("USDCx to sell. Omit to swap all agent USDCx."),
+        slippage: z
+          .number()
+          .min(0.005)
+          .max(0.2)
+          .optional()
+          .describe("Slippage as a fraction, default 0.04 (4%)."),
+      },
+    },
+    async ({ from, to, amountSats, amountUsdcx, slippage }, extra) => {
+      try {
+        const { userId } = await resolveMcpPaysatsUser(extra.authInfo);
+        const res = await swapOnAgent({
+          privyUserId: userId,
+          from,
+          to,
+          amountSats,
+          amountUsdcx,
+          slippage,
+        });
+        return text(JSON.stringify(res, null, 2));
+      } catch (e) {
+        return text(errorMessage(e, "Failed to swap"));
       }
     },
   );

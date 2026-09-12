@@ -8,6 +8,7 @@ import {
   usdcxToken,
   zestEnabled,
 } from "@/lib/stacks/config";
+import { reviveBigInts } from "@/lib/stacks/json";
 import {
   buildZestBorrowTx,
   buildZestCollateralAddTx,
@@ -37,6 +38,12 @@ import {
   transferStx,
 } from "@/services/stacks/signer";
 import { verifyUsdcxFundingTx } from "@/services/stacks/funding-tx";
+import {
+  getAgentSwapQuote,
+  getBitflowSdk,
+  publicAgentSwapQuote,
+  type AgentSwapToken,
+} from "@/services/stacks/bitflow";
 import {
   getZestPosition,
   previewZestBorrow,
@@ -254,6 +261,174 @@ export async function cancelSbtcDca(opts: {
     result,
   });
   return { ok: true, ...result };
+}
+
+function resolveSwapInput(opts: {
+  from: AgentSwapToken;
+  amountSats?: number;
+  amountUsdcx?: number;
+  balances: Awaited<ReturnType<typeof getStacksBalances>>;
+}): { human: number; raw: bigint } {
+  if (opts.from === "sbtc") {
+    const raw =
+      opts.amountSats != null && Number.isFinite(opts.amountSats)
+        ? BigInt(Math.max(0, Math.floor(opts.amountSats)))
+        : BigInt(opts.balances.sbtcRaw);
+    return { human: Number(raw) / 1e8, raw };
+  }
+  const raw =
+    opts.amountUsdcx != null && Number.isFinite(opts.amountUsdcx)
+      ? usdcxRawFromHuman(opts.amountUsdcx)
+      : BigInt(opts.balances.usdcxRaw);
+  return { human: Number(raw) / 1e6, raw };
+}
+
+export async function quoteAgentBitflowSwap(opts: {
+  privyUserId: string;
+  from?: AgentSwapToken;
+  to?: AgentSwapToken;
+  amountSats?: number;
+  amountUsdcx?: number;
+  slippage?: number;
+}) {
+  if (!swapEnabled()) {
+    throw new ServiceError(400, "Bitflow swap is mainnet-only");
+  }
+  const from = opts.from ?? "sbtc";
+  const to = opts.to ?? (from === "sbtc" ? "usdcx" : "sbtc");
+  const user = await ensureAgent(opts.privyUserId);
+  const signer = agentSignerFromUser(user);
+  const balances = await getStacksBalances(signer.address, "mainnet");
+  const input = resolveSwapInput({
+    from,
+    amountSats: opts.amountSats,
+    amountUsdcx: opts.amountUsdcx,
+    balances,
+  });
+  if (input.raw <= BigInt(0)) {
+    throw new ServiceError(400, `No ${from.toUpperCase()} to quote`);
+  }
+  const quote = await getAgentSwapQuote({
+    from,
+    to,
+    amountInHuman: input.human,
+    slippage: opts.slippage,
+  });
+  return {
+    ok: true as const,
+    agentAddress: signer.address,
+    quote: publicAgentSwapQuote(quote),
+  };
+}
+
+export async function swapOnAgent(opts: {
+  privyUserId: string;
+  from?: AgentSwapToken;
+  to?: AgentSwapToken;
+  amountSats?: number;
+  amountUsdcx?: number;
+  slippage?: number;
+}): Promise<
+  | NeedsDeposit
+  | {
+      ok: true;
+      txId: string;
+      quote: ReturnType<typeof publicAgentSwapQuote>;
+    }
+> {
+  if (!swapEnabled()) {
+    throw new ServiceError(400, "Bitflow swap is mainnet-only");
+  }
+  const from = opts.from ?? "sbtc";
+  const to = opts.to ?? (from === "sbtc" ? "usdcx" : "sbtc");
+  const user = await ensureAgent(opts.privyUserId);
+  const signer = agentSignerFromUser(user);
+  const balances = await getStacksBalances(signer.address, "mainnet");
+  const input = resolveSwapInput({
+    from,
+    amountSats: opts.amountSats,
+    amountUsdcx: opts.amountUsdcx,
+    balances,
+  });
+  if (input.raw <= BigInt(0)) {
+    return depositPayload(user, from, from === "sbtc" ? balances.sbtcSats : balances.usdcx, 1);
+  }
+
+  const haveRaw =
+    from === "sbtc" ? BigInt(balances.sbtcRaw) : BigInt(balances.usdcxRaw);
+  if (haveRaw < input.raw) {
+    return depositPayload(
+      user,
+      from,
+      from === "sbtc" ? balances.sbtcSats : balances.usdcx,
+      from === "sbtc" ? Number(input.raw) : input.human,
+    );
+  }
+  if (balances.stx < 0.02) {
+    return depositPayload(user, "stx", balances.stx, 0.1);
+  }
+
+  const quote = await getAgentSwapQuote({
+    from,
+    to,
+    amountInHuman: input.human,
+    slippage: opts.slippage,
+  });
+  const sdk = getBitflowSdk();
+  const swapParams = await sdk.getSwapParams(
+    {
+      route: reviveBigInts(quote.route),
+      amount: quote.amountIn,
+      tokenXDecimals: quote.tokenXDecimals,
+      tokenYDecimals: quote.tokenYDecimals,
+    },
+    signer.address,
+    quote.slippage,
+  );
+
+  const [{ txId }] = await broadcastContractCalls(signer, [
+    {
+      contractAddress: swapParams.contractAddress,
+      contractName: swapParams.contractName,
+      functionName: swapParams.functionName,
+      functionArgs: swapParams.functionArgs,
+      postConditions: swapParams.postConditions,
+    },
+  ]);
+  await waitZestTx(txId);
+
+  const tokenIn =
+    from === "sbtc" ? sbtcToken("mainnet").contract : usdcxToken("mainnet").contract;
+  const tokenOut =
+    to === "sbtc" ? sbtcToken("mainnet").contract : usdcxToken("mainnet").contract;
+
+  await prisma.stacksSwap.create({
+    data: {
+      userId: user.id,
+      stacksAddress: signer.address,
+      txId,
+      network: "mainnet",
+      tokenIn,
+      tokenOut,
+      amountInRaw: quote.amountInRaw,
+      amountOutRaw: quote.amountOutRaw,
+      status: "pending",
+    },
+  });
+  await recordAction({
+    userId: user.id,
+    tool: "swap",
+    txId,
+    status: "success",
+    params: opts,
+    result: { from, to, amountOut: quote.amountOut },
+  });
+
+  return {
+    ok: true,
+    txId,
+    quote: publicAgentSwapQuote(quote),
+  };
 }
 
 export async function borrowUsdcxAgainstSbtc(opts: {
